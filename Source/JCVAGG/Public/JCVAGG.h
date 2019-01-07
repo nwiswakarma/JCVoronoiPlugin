@@ -29,25 +29,12 @@
 
 #include "ModuleManager.h"
 
-class IJCVoronoiPlugin : public IModuleInterface
+class FJCVAGG : public IModuleInterface
 {
 public:
 
-	FORCEINLINE static IJCVoronoiPlugin& Get()
-	{
-		return FModuleManager::GetModuleChecked<IJCVoronoiPlugin>("JCVoronoiPlugin");
-	}
-
-	FORCEINLINE static bool IsAvailable()
-	{
-        return FModuleManager::Get().IsModuleLoaded("JCVoronoiPlugin");
-	}
-
-	virtual bool IsGameModule() const override
-	{
-		return true;
-	}
+	/** IModuleInterface implementation */
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
 };
 
-DECLARE_LOG_CATEGORY_EXTERN(LogJCV, Verbose, All);
-DECLARE_STATS_GROUP(TEXT("JCVoronoiPlugin"), STATGROUP_JCVoronoiPlugin, STATCAT_Advanced);

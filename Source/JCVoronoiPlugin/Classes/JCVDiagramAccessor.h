@@ -1,3 +1,28 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// MIT License
+// 
+// Copyright (c) 2018-2019 Nuraga Wiswakarma
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
 // 
 
 #pragma once
@@ -5,539 +30,516 @@
 #include "CoreUObject.h"
 #include "CoreTypes.h"
 #include "Containers/Set.h"
+
+#include "JCVoronoiPlugin.h"
 #include "JCVParameters.h"
-#include "JCVIsland.h"
-#include "JCVValueGenerator.h"
-#include "JCVPlateGenerator.h"
+#include "JCVDiagramMap.h"
 #include "JCVDiagramAccessor.generated.h"
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVFeatureId
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    uint8 Type;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Index;
+
+    FJCVFeatureId() = default;
+
+    FJCVFeatureId(uint8 InType, int32 InIndex)
+        : Type(InType)
+        , Index(InIndex)
+    {
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellTypeGroupRef
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<uint8> Data;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellRef
+{
+	GENERATED_BODY()
+
+    const FJCVCell* Data;
+
+    FJCVCellRef() : Data(nullptr)
+    {
+    }
+
+    FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
+    {
+    }
+};
+
+class UJCVDiagramObject;
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
+{
+	GENERATED_BODY()
+
+    const FJCVCell* Cell;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsValid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Index;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FVector2D Point;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float Value;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsBorder;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    uint8 FeatureType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 FeatureIndex;
+
+    FJCVCellDetailsRef() : bIsValid(false)
+    {
+    }
+
+    explicit FJCVCellDetailsRef(const FJCVCellRef& InCellRef)
+    {
+        Set(InCellRef.Data);
+    }
+
+    explicit FJCVCellDetailsRef(const FJCVCell* InCell)
+    {
+        Set(InCell);
+    }
+
+    void Set(const FJCVCell* InCell)
+    {
+        Cell = InCell;
+        bIsValid = Cell != nullptr;
+
+        if (bIsValid)
+        {
+            Index        = Cell->GetIndex();
+            Point        = Cell->ToVector2D();
+            Value        = Cell->Value;
+            bIsBorder    = Cell->bIsBorder;
+            FeatureType  = Cell->FeatureType;
+            FeatureIndex = Cell->FeatureIndex;
+        }
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellRefGroup
+{
+	GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite)
+    TArray<FJCVCellRef> Data;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellJunctionRef
+{
+	GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite)
+    FVector2D Point;
+
+    UPROPERTY(BlueprintReadWrite)
+    TArray<FJCVCellRef> Cells;
+
+    FJCVCellJunctionRef() = default;
+
+    FJCVCellJunctionRef(const FVector2D& InPoint, const FJCVConstCellGroup& InCells)
+        : Point(InPoint)
+        , Cells(InCells)
+    {
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVPointGroup
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector2D> Points;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVDualGeometry
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector2D> Points;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> PolyIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> CellIndices;
+
+    FORCEINLINE bool HasGeometry() const
+    {
+        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVPolyGeometry
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector> Points;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> PolyIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> CellIndices;
+
+    FORCEINLINE bool HasGeometry() const
+    {
+        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
+    }
+};
 
 UCLASS(BlueprintType)
 class JCVORONOIPLUGIN_API UJCVDiagramAccessor : public UObject
 {
 	GENERATED_BODY()
 
-    FJCVIsland* Island;
+    FJCVDiagramMap* Map;
 
 public:
 
-    void SetIsland(FJCVIsland& AccessedIsland)
+    void SetMap(FJCVDiagramMap& AccessedMap)
     {
-        Island = &AccessedIsland;
+        Map = &AccessedMap;
     }
 
-    FORCEINLINE FJCVIsland& GetIsland()
+    FORCEINLINE bool HasValidMap() const
     {
-        return *Island;
+        return Map != nullptr;
     }
 
-    FORCEINLINE const FJCVIsland& GetIsland() const
+    FORCEINLINE const FBox2D& GetBounds() const
     {
-        return *Island;
+        check(HasValidMap());
+        return Map->GetBounds();
+    }
+
+    FORCEINLINE FJCVDiagramMap& GetMap()
+    {
+        return *Map;
+    }
+
+    FORCEINLINE const FJCVDiagramMap& GetMap() const
+    {
+        return *Map;
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Has Valid Map")
+    bool K2_HasValidMap() const
+    {
+        return HasValidMap();
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Get Map Bounds")
+    FBox2D K2_GetBounds() const
+    {
+        return HasValidMap() ? GetBounds() : FBox2D();
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    bool IsValid() const
+    int32 GetCellIndex(const FJCVCellRef& CellRef) const
     {
-        return Island != nullptr;
+        if (HasValidMap() && CellRef.Data)
+        {
+            return Map->GetCellIndex(CellRef.Data);
+        }
+
+        return -1;
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     float GetCellValue(int32 CellIndex) const
     {
-        return (Island && Island->IsValidIndex(CellIndex))
-            ? Island->Cell(CellIndex).Value
+        return (Map && Map->IsValidIndex(CellIndex))
+            ? Map->GetCell(CellIndex).Value
             : -1.f;
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     FVector2D GetCellPosition(int32 CellIndex) const
     {
-        return (Island && Island->IsValidIndex(CellIndex))
-            ? Island->Cell(CellIndex).V2D()
+        return (Map && Map->IsValidIndex(CellIndex))
+            ? Map->GetCell(CellIndex).ToVector2D()
             : FVector2D();
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> GetCellRange(const FVector2D& StartPosition, const FVector2D& EndPosition)
+    FJCVCellRef GetCell(int32 CellIndex)
     {
-        TArray<int32> indices;
-
-        if (! Island)
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID ISLAND"));
-            return indices;
-        }
-
-        FJCVIsland& isle( *Island );
-        const FBox2D& area( isle->GetExtents() );
-        const FVector2D& v0( StartPosition );
-        const FVector2D& v1( EndPosition );
-
-        if (! area.IsInside(v0) || ! area.IsInside(v1))
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID INPUT POSITIONS"));
-            return indices;
-        }
-
-        const FJCVSite* s0 = isle->Find(v0);
-
-        if (s0)
-        {
-            TArray<const FJCVSite*> sites;
-            const int32 reserveSize = isle.Num()/4;
-
-            sites.Reserve(reserveSize);
-            indices.Reserve(reserveSize);
-
-            isle->FindAllTo(v1, *s0, sites);
-
-            for (const FJCVSite* site : sites)
-            {
-                indices.Emplace( isle.Cell(site)->index() );
-            }
-
-            indices.Shrink();
-        }
-
-        return MoveTemp( indices );
+        return (Map && Map->IsValidIndex(CellIndex))
+            ? FJCVCellRef(&Map->GetCell(CellIndex))
+            : FJCVCellRef();
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> GetRandomCells(int32 Count, int32 FeatureType, int32 FeatureIndex, int32 Seed, int32 IterationLimit = 50)
+    bool IsValidCell(const FJCVCellRef& CellRef) const
     {
-        if (! Island)
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID ISLAND"));
-            return TArray<int32>();
-        }
-        if (Count <= 0)
-        {
-            return TArray<int32>();
-        }
-
-        FJCVIsland& isle( *Island );
-        FRandomStream rand(Seed);
-        TSet<int32> indexSet;
-
-        const int32 iterN = IterationLimit;
-
-        if (FeatureType < 0)
-        {
-            int32 cellN = FMath::Clamp(Count, 0, isle.Num());
-            indexSet.Reserve(cellN);
-
-            for (int32 i=0; i<iterN && indexSet.Num()<cellN; ++i)
-            {
-                indexSet.Emplace(rand.RandHelper(cellN));
-            }
-        }
-        else
-        {
-            FJCVFeatureGroup* pfg = isle.GetFeatureGroup((uint8) FeatureType);
-            if (pfg)
-            {
-                FJCVFeatureGroup& fg( *pfg );
-
-                if (fg.CellGroups.IsValidIndex(FeatureIndex))
-                {
-                    FJCVCellGroup& cg( fg.CellGroups[FeatureIndex] );
-                    const int32 cellN = cg.Num();
-                    const int32 outN = FMath::Clamp(Count, 0, cellN);
-
-                    // Feature group does not contain any cell, abort
-                    if (outN < 1)
-                    {
-                        return TArray<int32>();
-                    }
-
-                    indexSet.Reserve(outN);
-
-                    for (int32 i=0; i<iterN && indexSet.Num()<outN; ++i)
-                    {
-                        indexSet.Emplace(cg[rand.RandHelper(cellN)]->index());
-                    }
-                }
-                else
-                {
-                    TArray<FJCVCellGroup>& CellGroups( fg.CellGroups );
-                    TArray<int32> srcIndices;
-                    const int32 cellN = fg.GetCellCount();
-
-                    srcIndices.Reserve(cellN);
-
-                    for (const FJCVCellGroup& cg : CellGroups)
-                        for (const FJCVCell* c : cg)
-                            srcIndices.Emplace(c->index());
-
-                    const int32 outN = FMath::Clamp(Count, 0, cellN);
-
-                    // Feature group does not contain any cell, abort
-                    if (outN < 1)
-                    {
-                        return TArray<int32>();
-                    }
-
-                    indexSet.Reserve(outN);
-
-                    for (int32 i=0; i<iterN && indexSet.Num()<outN; ++i)
-                    {
-                        indexSet.Emplace(srcIndices[rand.RandHelper(cellN)]);
-                    }
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID FEATURE GROUP"));
-            }
-        }
-
-        return MoveTemp( indexSet.Array() );
+        return (GetCellIndex(CellRef) >= 0);
     }
+
+// MARK FEATURE FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    int32 GetClosestCellAt(const FVector2D& Pos) const
-    {
-        if (Island)
-        {
-            const FJCVSite* site = Island->GetDiagram().FindClosest(Pos);
-            return site ? site->index : -1;
-        }
-        return -1;
-    }
+    void MarkDefaultFeatures(uint8 FeatureType);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ResetFeatures(uint8 FeatureType, int32 FeatureIndex)
-    {
-        if (Island)
-        {
-            Island->ResetFeatures(FeatureType, FeatureIndex);
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void MarkFeaturesByType(FJCVCellTraitsParams TypeTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkFeaturesByType(FJCVCellTraitsParams TypeTraits)
-    {
-        if (Island)
-        {
-            FJCVValueGenerator::MarkFeatures(*Island, FJCVCellTraits(TypeTraits));
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void MarkFeaturesByValue(FJCVValueTraitsParams ValueTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkFeaturesByValue(FJCVValueTraitsParams ValueTraits)
-    {
-        if (Island)
-        {
-            FJCVValueGenerator::MarkFeatures(*Island, FJCVValueTraits(ValueTraits));
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous = true);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkPositions(const TArray<FVector2D>& Positions, uint8 FeatureType, int32 FeatureIndex)
-    {
-        if (! Island)
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID ISLAND"));
-            return;
-        }
-
-        FJCVIsland& isle( *Island );
-
-        const int32 posN = Positions.Num();
-        const int32 siteN = isle.Num();
-        const int32 resvN = posN<siteN ? posN : siteN;
-
-        TArray<const FJCVSite*> siteQ;
-        TSet<const FJCVSite*> siteS;
-        siteS.Reserve(resvN);
-
-        const FJCVSite* s = nullptr;
-        for (const FVector2D& v : Positions)
-        {
-            if (s)
-            {
-                siteQ.Reset();
-                isle->FindAllTo(v, *s, siteQ);
-                for (const FJCVSite* s1 : siteQ)
-                    isle.MarkFiltered(s1, FeatureType, FeatureIndex, siteS, true);
-                s = siteQ.Last();
-            }
-            else
-            {
-                s = isle->Find(v);
-                isle.MarkFiltered(s, FeatureType, FeatureIndex, siteS, true);
-            }
-        }
-    }
+    void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, uint8 FeatureType, int32 FeatureIndex, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond)
-    {
-        if (Island)
-        {
-            FJCVIsland& isle( *Island );
-            const FBox2D& area( isle->GetExtents() );
-            const FVector2D& v0( StartPosition );
-            const FVector2D& v1( EndPosition );
+    void MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond);
 
-            if (! area.IsInside(v0) || ! area.IsInside(v1))
-            {
-                UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID INPUT POSITIONS"));
-                return;
-            }
-
-            const FJCVSite* s0 = isle->Find(v0);
-            const FJCVCellTraits cond( FilterCond );
-
-            if (s0)
-            {
-                TSet<const FJCVSite*> sites;
-                sites.Reserve(isle.Num()/4);
-                sites.Emplace(s0);
-                isle->FindAllTo(v1, *s0, sites);
-                for (const FJCVSite* site : sites)
-                {
-                    FJCVCell* cell = isle.Cell(site);
-                    check(cell);
-                    if (cell && (!bUseFilter || cond.test(*cell)))
-                    {
-                        cell->SetFeature(Value, FeatureType, FeatureIndex);
-                    }
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID ISLAND"));
-        }
-    }
+// FEATURE UTILITY FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRangeByID(int32 StartCellID, int32 EndCellID, uint8 FeatureType, int32 FeatureIndex, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond)
-    {
-        if (Island)
-        {
-            FJCVIsland& isle( *Island );
-
-            if (isle.IsValidIndex(StartCellID) && isle.IsValidIndex(EndCellID))
-            {
-                FVector2D v0( isle[StartCellID].V2D() );
-                FVector2D v1( isle[EndCellID].V2D() );
-                MarkRange(v0, v1, FeatureType, FeatureIndex, Value, bUseFilter, FilterCond);
-            }
-            else
-            {
-                UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByID() ABORTED, INVALID INPUT POSITIONS"));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByID() ABORTED, INVALID ISLAND"));
-        }
-    }
+    int32 GetFeatureCount() const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ApplyValueByFeatures(FJCVCellTraitsParams TypeTraits, float Value)
-    {
-        if (Island)
-        {
-            FJCVValueGenerator::ApplyValueByFeatures(*Island, FJCVCellTraits(TypeTraits), Value);
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID ISLAND"));
-        }
-    }
+    int32 GetFeatureGroupCount(uint8 FeatureType) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1, int32 FeatureIndex, bool bGroupFeatures)
-    {
-        if (Island)
-        {
-            Island->ConvertIsolated(FeatureType0, FeatureType1, FeatureIndex, bGroupFeatures);
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::ConvertIsolated() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void ResetFeatures(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ExpandFeature(uint8 FeatureType, int32 FeatureIndex)
-    {
-        if (Island)
-        {
-            if (FeatureIndex < 0)
-            {
-                Island->ExpandFeature(FeatureType);
-            }
-            else
-            {
-                Island->ExpandFeature(FeatureType, FeatureIndex);
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::ExpandFeature() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void ApplyValueByFeatures(FJCVCellTraitsParams TypeTraits, float Value);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void GroupByFeatures()
-    {
-        if (Island)
-        {
-            Island->GroupByFeatures();
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramAccessor::GroupByFeatures() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1, int32 FeatureIndex, bool bGroupFeatures);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillAt(const FVector2D& Position, const FJCVRadialFillParams& Params, int32 Seed)
-    {
-        if (Island)
-        {
-            FJCVIsland& isle( *Island );
-            FJCVCell* cell( isle.Cell(isle->Find(Position)) );
-            if (cell)
-            {
-                FJCVValueGenerator::FRadialFill fillParams(Params);
-                FJCVValueGenerator::AddRadialFill(isle, *cell, fillParams, Seed);
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::AddRadialFill() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void ExpandFeature(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillByIndex(int32 CellIndex, const FJCVRadialFillParams& Params, int32 Seed)
-    {
-        if (Island)
-        {
-            FJCVIsland& isle( *Island );
-            if (isle.IsValidIndex(CellIndex))
-            {
-                FJCVCell& cell( isle.Cell(CellIndex) );
-                FJCVValueGenerator::FRadialFill fillParams(Params);
-                FJCVValueGenerator::AddRadialFill(isle, cell, fillParams, Seed);
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::AddRadialFill() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void PointFillSubdivideFeatures(
+        const uint8 FeatureType,
+        const TArray<int32>& OriginCellIndices,
+        int32 SegmentCount,
+        int32 Seed
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillNum(int32 PointCount, const FJCVRadialFillParams& Params, int32 Seed, float Padding=0.f, float ValueThreshold=.25f, int32 MaxPlacementTest=50)
-    {
-        if (Island)
-        {
-            if (PointCount <= 0)
-            {
-                return;
-            }
-
-            FJCVIsland& isle( *Island );
-            FRandomStream rand(Seed);
-
-            const float tMin = FMath::Clamp(ValueThreshold, 0.f, 1.f);
-            const float tMax = 1.f-tMin;
-            const float pad = FMath::Clamp(Padding, 0.f, 1.f);
-            const int32 cellN = isle.Num();
-
-            FBox2D extents( isle->GetExtents() );
-            FBox2D area(extents.Min*pad, extents.Max*(1.f-pad));
-
-            for (int32 it=0; it<PointCount; ++it)
-            {
-                for (int32 i=0; i<MaxPlacementTest; ++i)
-                {
-                    int32 cellIdx = rand.RandHelper(cellN);
-                    FJCVCell& cell( isle[cellIdx] );
-
-                    if (cell.Value < tMin && area.IsInside(cell.V2D()))
-                    {
-                        FJCVValueGenerator::FRadialFill fillParams(Params);
-                        fillParams.Value *= rand.GetFraction()*tMax;
-                        fillParams.Value += tMin;
-                        FJCVValueGenerator::AddRadialFill(isle, cell, fillParams, rand);
-                        break;
-                    }
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::AddRadialFill() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void GroupByFeatures();
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void GenerateSegments(const TArray<FVector2D>& SegmentOrigins, int32 SegmentMergeCount, int32 Seed)
-    {
-        if (Island)
-        {
-            FRandomStream rand(Seed);
-            FJCVValueGenerator::GenerateSegmentExpands(*Island, SegmentOrigins, SegmentMergeCount, rand);
-        }
-        else
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::GenerateSegments() ABORTED, INVALID ISLAND"));
-        }
-    }
+    void ShrinkFeatures();
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, const FJCVRadialFillParams& ValueParams, const FJCVOrogenParams& OrogenParams)
-    {
-        if (! Island)
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::GenerateOrogeny() ABORTED, INVALID ISLAND"));
-            return;
-        }
+    void ScaleFeatureValuesByIndex(uint8 FeatureType, int32 IndexOffset = 0);
 
-        if (! PlateAccessor || ! PlateAccessor->IsValid())
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::GenerateOrogeny() ABORTED, INVALID PLATE ISLAND"));
-            return;
-        }
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void InvertFeatureValues(FJCVFeatureId FeatureId);
 
-        FJCVIsland& plate( PlateAccessor->GetIsland() );
-        FJCVIsland& landscape( *Island );
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void ApplyCurveToFeatureValues(uint8 FeatureType, UCurveFloat* CurveScale);
 
-        // Generates orogeny
-        FRandomStream rand(Seed);
-        FJCVValueGenerator::FRadialFill vp(ValueParams);
-        FJCVPlateGenerator::FOrogenParams orogenParams(vp, OrogenParams.OriginThreshold, OrogenParams.bDivergentAsConvergent);
-        FJCVPlateGenerator::GenerateOrogeny(plate, landscape, orogenParams, rand);
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void MapNormalizedDistanceFromCell(FJCVCellRef OriginCellRef, FJCVFeatureId FeatureId, bool bAgainstAnyType = false);
 
-        // Mark features with prepared set
-        FJCVCellSet cellS;
-        cellS.Reserve(landscape.Num());
-        const float threshold = OrogenParams.AreaThreshold;
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVPointGroup GetFeaturePoints(FJCVFeatureId FeatureId) const;
 
-        // Assign Island Feature Type
-        FJCVValueTraits IslandCond(threshold, 100.f, OrogenParams.FeatureType);
-        FJCVValueGenerator::MarkFeatures(landscape, IslandCond, cellS);
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup GetFeatureCells(FJCVFeatureId FeatureId) const;
 
-        landscape.GroupByFeatures();
-    }
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<int32> GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders = false, int32 MinCellDistance = 0) const;
+
+// CELL QUERY FUNCTIONS
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    int32 GetCellCount() const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellDetailsRef GetCellDetails(const FJCVCellRef& CellRef) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVCellDetailsRef> GetCellGroupDetails(const TArray<FJCVCellRef> CellRefs) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<uint8> GetNeighbourTypes(const FJCVCellRef& CellRef) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVCellTypeGroupRef> GetGroupNeighbourTypes(const FJCVCellRefGroup& CellGroup) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<int32> GetCellRange(const FVector2D& StartPosition, const FVector2D& EndPosition);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRef GetRandomCell(FJCVFeatureId FeatureId, int32 Seed);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<int32> GetRandomCells(int32 Count, FJCVFeatureId FeatureId, int32 Seed, int32 IterationLimit = 50);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    int32 GetClosestCellAt(const FVector2D& Pos) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<int32> FilterPoints(const TArray<FVector2D>& Points, FJCVFeatureId FeatureId) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRef FindCell(const FVector2D& Position) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup FindCells(const TArray<FVector2D>& Positions) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVCellRefGroup> FindCellsWithinRects(const TArray<FBox2D>& Rects) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup FindBorderCells(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVCellJunctionRef> FindJunctionCells(uint8 FeatureType) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVPointGroup> FindEdgePoints(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    bool FindEdgePointsWithEndPoints(
+        UPARAM(ref) TArray<FJCVPointGroup>& PointGroups,
+        UPARAM(ref) TArray<FJCVCellRefGroup>& EndPointCellGroups,
+        uint8 FeatureType0,
+        uint8 FeatureType1,
+        bool bAllowBorders = false,
+        bool bAgainstAnyType = false
+        ) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVPointGroup> GenerateOrderedFeatureBorderPoints(
+        uint8 InitialFeatureType,
+        TArray<uint8> AdditionalFeatures,
+        bool bExpandEdges = false,
+        bool bAllowBorders = false
+        ) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup GetCellByOriginRadius(
+        const FJCVCellRef& OriginCellRef,
+        float Radius,
+        FJCVFeatureId FeatureId,
+        bool bAgainstAnyType = false
+        ) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup ExpandCellQuery(const FJCVCellRef& CellRef, int32 ExpandCount, FJCVFeatureId FeatureId, bool bAgainstAnyType) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup ExpandCellGroupQuery(const FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId, int32 ExpandCount, bool bAgainstAnyType) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void FilterCellsByType(UPARAM(ref) FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void ExcludeCellsByType(UPARAM(ref) FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    FJCVCellRefGroup MergeCellGroups(const TArray<FJCVCellRefGroup>& CellGroups) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<FJCVCellJunctionRef> FilterUniqueJunctions(const TArray<FJCVCellJunctionRef>& Junctions) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    float GetClosestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    float GetFurthestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId) const;
+
+// CELL VALUE FUNCTIONS
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void AddRadialFillAt(const FVector2D& Position, const FJCVRadialFillParams& Params, int32 Seed);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void AddRadialFillByIndex(int32 CellIndex, const FJCVRadialFillParams& Params, int32 Seed);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void AddRadialFillNum(int32 PointCount, const FJCVRadialFillParams& Params, int32 Seed, float Padding=0.f, float ValueThreshold=.25f, int32 MaxPlacementTest=50);
+
+// CELL UTILITY FUNCTIONS
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    TArray<int32> GenerateCellGridIndices(const FJCVCellRef& Cell, const FIntPoint& GridDimension, const float BoundsExpand = 0.f) const;
+
+// MAP UTILITY FUNCTIONS
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GenerateSegments(const TArray<FVector2D>& SegmentOrigins, int32 SegmentMergeCount, int32 Seed);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, const FJCVRadialFillParams& ValueParams, const FJCVOrogenParams& OrogenParams);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GenerateDepthMap(UJCVDiagramAccessor* TargetAccessor, FJCVFeatureId FeatureId);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GenerateDualGeometry(UPARAM(ref) FJCVDualGeometry& Geometry, bool bClearContainer = true);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GenerateDualGeometryByFeature(UPARAM(ref) FJCVDualGeometry& Geometry, FJCVFeatureId FeatureId, bool bClearContainer = true);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GeneratePolyGeometryByFeature(UPARAM(ref) FJCVPolyGeometry& Geometry, FJCVFeatureId FeatureId, bool bUseCellAverageValue, bool bClearContainer = true);
+
+private:
+
+    void GenerateOrderedFeatureBorderPoints(
+        TArray<FJCVCellEdgeList>& EdgeLists,
+        uint8 FeatureType0,
+        uint8 FeatureType1,
+        bool bAllowBorders
+        ) const;
+
+    void GetPointDualGeometry(
+        TSet<FIntPoint>& VisitedPointSet,
+        TMap<int32, int32>& CellIndexMap,
+        TArray<FVector2D>& Points,
+        TArray<int32>& PolyIndices,
+        TArray<int32>& CellIndices,
+        const FJCVPoint& Point,
+        const FJCVCell& Cell0,
+        const FJCVCell& Cell1,
+        const FJCVCell& Cell2
+        ) const;
+
+    void MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId);
+    void MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId);
 };
-

@@ -1,3 +1,28 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// MIT License
+// 
+// Copyright (c) 2018-2019 Nuraga Wiswakarma
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
 // 
 
 #pragma once
@@ -55,8 +80,8 @@ public:
     typedef TArray<FTectonicPlate> FTectonicGroup;
 
     static void GenerateOrogeny(
-        FJCVIsland& PlateIsland,
-        FJCVIsland& Landscape,
+        FJCVDiagramMap& PlateIsland,
+        FJCVDiagramMap& Landscape,
         const FTectonicGroup& Plates,
         const FOrogenParams& OrogenParams,
         FRandomStream& Rand
@@ -71,7 +96,7 @@ public:
                 plateMap.Emplace(ft, &plate);
         }
 
-        FJCVGraphSet incidentEdges;
+        FJCVConstEdgeSet incidentEdges;
         // Find incident edges between plates
         incidentEdges.Reserve(PlateIsland.Num());
         for (TPair<uint8, const FTectonicPlate*> kv : plateMap)
@@ -85,7 +110,7 @@ public:
                 FJCVCellGroup cg;
                 PlateIsland.GetBorderCells(cg, ft0, ft1);
 
-                FJCVGraphSet es;
+                FJCVConstEdgeSet es;
                 es.Reserve(cg.Num());
                 PlateIsland.GetBorderEdges(cg, es, ft1);
 
@@ -98,30 +123,30 @@ public:
         const float originThreshold = OrogenParams.OriginValueThreshold;
         const bool bDivergentAsConvergent = OrogenParams.bDivergentAsConvergent;
         // Generates orogen values on Landscape island parameter
-        for (const FJCVGraphEdge* g : incidentEdges)
+        for (const FJCVEdge* g : incidentEdges)
         {
             // Ensure valid involved incident cells
-            const FJCVCell* c0( PlateIsland.Cell(g->edge->sites[0]) );
-            const FJCVCell* c1( PlateIsland.Cell(g->edge->sites[1]) );
+            const FJCVCell* c0(PlateIsland.GetCell(g->edge->sites[0]));
+            const FJCVCell* c1(PlateIsland.GetCell(g->edge->sites[1]));
             if (! c0 || ! c1)
                 continue;
             // Ensure valid involved incident plates
-            const FTectonicPlate** pPlate0( plateMap.Find(c0->FeatureType) );
-            const FTectonicPlate** pPlate1( plateMap.Find(c1->FeatureType) );
+            const FTectonicPlate** pPlate0(plateMap.Find(c0->FeatureType));
+            const FTectonicPlate** pPlate1(plateMap.Find(c1->FeatureType));
             if (! pPlate0 || ! pPlate1 || pPlate0 == pPlate1)
                 continue;
-            const FTectonicPlate& plate0( **pPlate0 );
-            const FTectonicPlate& plate1( **pPlate1 );
+            const FTectonicPlate& plate0(**pPlate0);
+            const FTectonicPlate& plate1(**pPlate1);
             // Ensure valid incident origin cell
-            const FJCVGraphNode node(g, 0);
-            const FVector2D nodePos( node.vmid() );
-            FJCVCell* cell( Landscape.Cell(Landscape->Find(nodePos)) );
+            const FJCVEdgeNode node(g, 0);
+            const FVector2D nodePos(node.GetMidVector2D());
+            FJCVCell* cell( Landscape.GetCell(Landscape->Find(nodePos)) );
             if (! cell)
                 continue;
             // Make sure to only account convergent plate movement
             {
-                const FVector2D dir0 = (nodePos - c0->V2D()).GetSafeNormal();
-                const FVector2D dir1 = (nodePos - c1->V2D()).GetSafeNormal();
+                const FVector2D dir0 = (nodePos - c0->ToVector2D()).GetSafeNormal();
+                const FVector2D dir1 = (nodePos - c1->ToVector2D()).GetSafeNormal();
                 const float dot0 = dir0 | plate0.Direction;
                 const float dot1 = dir1 | plate1.Direction;
                 if (bDivergentAsConvergent)
@@ -145,8 +170,8 @@ public:
     }
 
     FORCEINLINE static void GenerateOrogeny(
-        FJCVIsland& PlateIsland,
-        FJCVIsland& Landscape,
+        FJCVDiagramMap& PlateIsland,
+        FJCVDiagramMap& Landscape,
         const FOrogenParams& OrogenParams,
         FRandomStream& Rand
     ) {
@@ -171,7 +196,7 @@ public:
         return tectonics;
     }
 
-    FORCEINLINE static FTectonicGroup GenerateTectonicPlates(const FJCVIsland& Island, FRandomStream& Rand)
+    FORCEINLINE static FTectonicGroup GenerateTectonicPlates(const FJCVDiagramMap& Island, FRandomStream& Rand)
     {
         TArray<const FJCVFeatureGroup*> featureGroups;
         for (int32 i=0; i<Island.GetFeatureCount(); ++i)

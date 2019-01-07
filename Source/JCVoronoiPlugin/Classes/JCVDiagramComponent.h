@@ -1,11 +1,37 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// MIT License
+// 
+// Copyright (c) 2018-2019 Nuraga Wiswakarma
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
 // 
 
 #pragma once
 
 #include "Components/ActorComponent.h"
-#include "JCVIsland.h"
-#include "JCVIslandManager.h"
+#include "JCVDiagramMap.h"
+#include "JCVDiagramMapManager.h"
 #include "JCVDiagramAccessor.h"
+#include "JCVDiagramObject.h"
 #include "JCVDiagramComponent.generated.h"
 
 UCLASS(BlueprintType, Blueprintable)
@@ -13,175 +39,35 @@ class JCVORONOIPLUGIN_API UJCVDiagramComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-    struct FContextIdentifier
-    {
-        TPWJCVIslandContext Context;
-        TMap<int32, int32> AccessorMap;
-
-        FContextIdentifier() = default;
-        FContextIdentifier(TPWJCVIslandContext c) : Context(c) {};
-
-        FORCEINLINE bool IsValid() const
-        {
-            return Context.IsValid();
-        }
-
-        FORCEINLINE TPSJCVIslandContext Pin()
-        {
-            return Context.Pin();
-        }
-
-        FORCEINLINE TPSJCVIslandContext Pin() const
-        {
-            return Context.Pin();
-        }
-    };
-
-    TMap<int32, FContextIdentifier> ContextMap;
-
-	UPROPERTY(Transient)
-    TArray<UJCVDiagramAccessor*> Accessors;
-
-    FORCEINLINE bool _HasContext(int32 ContextID) const
-    {
-        return ContextMap.Contains(ContextID) && ContextMap.FindChecked(ContextID).IsValid();
-    }
-
-    FORCEINLINE bool _HasIsland(int32 ContextID, int32 IslandID) const
-    {
-        return _HasContext(ContextID) ? GetContext(ContextID)->HasIsland(IslandID) : false;
-    }
-
-    FORCEINLINE TPSJCVIslandContext GetContext(int32 ContextID)
-    {
-        return ContextMap.FindChecked(ContextID).Pin();
-    }
-
-    FORCEINLINE TPSJCVIslandContext GetContext(int32 ContextID) const
-    {
-        return ContextMap.FindChecked(ContextID).Pin();
-    }
-
-    FORCEINLINE FJCVIsland& GetIsland(int32 ContextID, int32 IslandID)
-    {
-        return GetContext(ContextID)->GetIsland(IslandID);
-    }
-
-    FORCEINLINE FJCVIsland& GetIsland(int32 ContextID, int32 IslandID) const
-    {
-        return GetContext(ContextID)->GetIsland(IslandID);
-    }
-
-    int32 CreateAccessor(FJCVIsland& Island)
-    {
-        UJCVDiagramAccessor* accessor = NewObject<UJCVDiagramAccessor>(this);
-        accessor->SetIsland(Island);
-
-        int32 aid = -1;
-
-        for (int32 i=0; i<Accessors.Num(); ++i)
-        {
-            if (! Accessors[i])
-            {
-                aid = i;
-                break;
-            }
-        }
-
-        if (aid < 0)
-        {
-            aid = Accessors.Emplace(accessor);
-        }
-        else
-        {
-            Accessors[aid] = accessor;
-        }
-
-        return aid;
-    }
-
 public:
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Diagram")
+    UJCVDiagramObject* DiagramObject = nullptr;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void SetupDiagramObject()
+    {
+        if (! IsValid(DiagramObject))
+        {
+            DiagramObject = NewObject<UJCVDiagramObject>(this);
+        }
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void ResetDiagramObject()
+    {
+        if (IsValid(DiagramObject))
+        {
+            DiagramObject->ResetDiagramObject();
+            DiagramObject = nullptr;
+        }
+    }
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override
     {
-        // Make sure diagram context and its islands are destroyed
-        if (FJCVIslandManager::HasValidMI())
-        {
-            if (FJCVIslandManager::MI()->HasID(this))
-            {
-                FJCVIslandManager::MI()->RemoveID(this);
-            }
-        }
-
-        ContextMap.Empty();
-        Accessors.Empty();
+        // Reset and clear diagram object
+        ResetDiagramObject();
 
         Super::EndPlay(EndPlayReason);
     }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    bool HasContext(int32 ContextID) const
-    {
-        return _HasContext(ContextID);
-    }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    bool HasIsland(int32 ContextID, int32 IslandID)
-    {
-        return _HasIsland(ContextID, IslandID);
-    }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateContext(int32 ContextID, FVector2D Size, TArray<FVector2D> Points)
-    {
-        if (! FJCVIslandManager::HasValidMI())
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::CreateContext() ABORTED, NO VALID ISLAND MANAGER INSTANCE"));
-            return;
-        }
-
-        if (Points.Num() <= 0)
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::CreateContext() ABORTED, UNABLE TO GENERATE ISLAND WITH EMPTY POINTS"));
-            return;
-        }
-
-        if (! _HasContext(ContextID))
-        {
-            TPSJCVIslandContext Context = MakeShareable(new FJCVIslandContext(Size, Points));
-            ContextMap.Emplace(ContextID, Context);
-            FJCVIslandManager::MI()->AddInstance(this, ContextID, Context);
-        }
-    }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateIsland(int32 ContextID, int32 IslandID)
-    {
-        if (! _HasContext(ContextID))
-        {
-            UE_LOG(LogTemp,Warning, TEXT("UJCVDiagramComponent::CreateIsland() ABORTED, INVALID ISLAND CONTEXT"));
-            return;
-        }
-
-        TPSJCVIslandContext context = GetContext(ContextID);
-        FJCVIsland& island( context->CreateIsland(IslandID, true) );
-
-        FContextIdentifier& cid( ContextMap.FindChecked(ContextID) );
-        int32 aid = CreateAccessor(island);
-
-        cid.AccessorMap.Emplace(IslandID, aid);
-    }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    UJCVDiagramAccessor* GetAccessor(int32 ContextID, int32 IslandID)
-    {
-        if (_HasIsland(ContextID, IslandID))
-        {
-            FContextIdentifier& cid( ContextMap.FindChecked(ContextID) );
-            check(cid.AccessorMap.Contains(IslandID));
-            return Accessors[cid.AccessorMap.FindChecked(IslandID)];
-        }
-        return nullptr;
-    }
 };
-

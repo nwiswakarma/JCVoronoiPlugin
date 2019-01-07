@@ -1,3 +1,28 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// MIT License
+// 
+// Copyright (c) 2018-2019 Nuraga Wiswakarma
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
 // 
 
 #pragma once
@@ -72,10 +97,10 @@ class FJCVValueGenerator
 {
     typedef FJCVCellTraits  FTraits;
     typedef FJCVSite        FSite;
-    typedef FJCVGraphEdge   FGraph;
+    typedef FJCVEdge   FGraph;
     typedef FJCVCell        FCell;
 
-    static int32 MarkFeature(FJCVIsland& Island, TQueue<FCell*>& cellQ, TSet<FCell*>& ExclusionSet, FCell& c, int32 i, const FTraits& cond)
+    static int32 MarkFeature(FJCVDiagramMap& Map, TQueue<FCell*>& cellQ, TSet<FCell*>& ExclusionSet, FCell& c, int32 i, const FTraits& cond)
     {
         int32 count = 0;
 
@@ -87,7 +112,7 @@ class FJCVValueGenerator
             FCell* cell;
             cellQ.Dequeue(cell);
 
-            FGraph* g( cell->Graph() );
+            FGraph* g = cell->GetEdge();
             check(g);
 
             if (cond.test(*cell))
@@ -100,7 +125,7 @@ class FJCVValueGenerator
 
             do
             {
-                FCell* n( Island.Cell(g) );
+                FCell* n = Map.GetCellNeighbour(g);
 
                 if (! n) continue;
                 if (ExclusionSet.Contains(n)) continue;
@@ -166,169 +191,9 @@ public:
         }
     };
 
-    static void PointFill(FJCVIsland& Island, const TArray<FCell*>& seeds)
+    static void AddRadialFill(FJCVDiagramMap& Map, FCell& Center, const FRadialFill& params, FRandomStream& Rand)
     {
-        if (Island.IsEmpty() || seeds.Num() < 1)
-        {
-            return;
-        }
-
-        TQueue<FCell*> cellQ;
-        TSet<FCell*> ExclusionSet;
-
-        ExclusionSet.Reserve(Island.Num());
-
-        for (FCell* c : seeds)
-        {
-            if (c && ! ExclusionSet.Contains(c))
-            {
-                cellQ.Enqueue(c);
-                ExclusionSet.Emplace(c);
-            }
-        }
-
-        while (! cellQ.IsEmpty())
-        {
-            FCell* cell;
-            cellQ.Dequeue(cell);
-
-            FGraph* g( cell->Graph() );
-            check(g);
-
-            do
-            {
-                FCell* n( Island.Cell(g) );
-
-                if (! n) continue;
-                if (ExclusionSet.Contains(n)) continue;
-
-                n->SetType(*cell);
-                ExclusionSet.Emplace(n);
-                cellQ.Enqueue(n);
-            }
-            while ((g = g->next) != nullptr);
-        }
-    }
-
-    static void GenerateSegmentExpands(
-        FJCVIsland& Island,
-        const TArray<FVector2D>& Origins,
-        int32 SegmentCount,
-        FRandomStream& Rand,
-        TArray<FCell*>& OutOrigins,
-        TArray<FCell*>& OutSegments
-    ) {
-        if (Island.IsEmpty())
-        {
-            return;
-        }
-
-        TArray<FCell*> originCells;
-        const FBox2D ext( Island->GetExtents() );
-        const int32 originCount( Origins.Num() );
-
-        // Generates segmented plate origins
-        for (int32 i=0; i<originCount; ++i)
-        {
-            FCell* c = Island.Cell(Island->Find(Origins[i]));
-            if (c)
-            {
-                c->SetType(i, 0);
-                originCells.Emplace(c);
-            }
-        }
-
-        check(originCells.Num() > 0);
-        OutSegments = originCells;
-
-        // Generates segmented plate features by point fill expand the origins
-        PointFill(Island, originCells);
-        Island.GroupByFeatures();
-        Island.ConnectFeatures();
-
-        TQueue<uint8> plateQ;
-        TSet<uint8> plateS;
-        // Clamp the number of plate to be generated
-        // if there is not enough plate segments
-        const int32 plateN = FMath::Min(SegmentCount, originCount);
-
-        // Generate plate origins
-        for (int32 i=0; i<plateN; ++i)
-        {
-            FRotator randRot( FRotator(0.f,Rand.GetFraction()*360.f,0.f) );
-            FVector2D randDir( randRot.Vector() );
-            FVector2D randPos( ext.GetCenter() + randDir*ext.GetExtent()*2.f );
-            FCell* plateCell = nullptr;
-            float dist0 = TNumericLimits<float>::Max();
-            for (FCell* c : originCells)
-            {
-                float dist1 = (randPos-c->V2D()).Size();
-                if (! plateS.Contains(c->FeatureType) && dist1 < dist0)
-                {
-                    plateCell = c;
-                    dist0 = dist1;
-                }
-            }
-            if (plateCell)
-            {
-                FJCVFeatureGroup* fg = Island.GetFeatureGroup(plateCell->FeatureType);
-                if (fg)
-                {
-                    plateQ.Enqueue(fg->FeatureType);
-                    plateS.Emplace(fg->FeatureType);
-                }
-                OutOrigins.Emplace(plateCell);
-            }
-        }
-
-        // Merges plate segments
-        while (! plateQ.IsEmpty())
-        {
-            uint8 ft0;
-            plateQ.Dequeue(ft0);
-
-            FJCVFeatureGroup* fg0 = Island.GetFeatureGroup(ft0);
-            if (fg0)
-            {
-                bool bMerged = false;
-                for (uint8 ft1 : fg0->Neighbours)
-                {
-                    if (plateS.Contains(ft1))
-                        continue;
-                    FJCVFeatureGroup* fg1 = Island.GetFeatureGroup(ft1);
-                    if (fg1)
-                    {
-                        Island.MergeGroup(*fg0, *fg1);
-                        Island.ConvertConnections(*fg0, *fg1);
-                        bMerged = true;
-                        break;
-                    }
-                }
-                if (bMerged)
-                {
-                    plateQ.Enqueue(ft0);
-                }
-            }
-        }
-
-        // Shrink unused segmented plate feature groups
-        Island.ShrinkGroups();
-    }
-
-    static void GenerateSegmentExpands(
-        FJCVIsland& Island,
-        const TArray<FVector2D>& Origins,
-        int32 SegmentCount,
-        FRandomStream& Rand
-    ) {
-        TArray<FJCVCell*> originCells;
-        TArray<FJCVCell*> segmentCells;
-        GenerateSegmentExpands(Island, Origins, SegmentCount, Rand, originCells, segmentCells);
-    }
-
-    static void AddRadialFill(FJCVIsland& Island, FCell& Center, const FRadialFill& params, FRandomStream& Rand)
-    {
-        check(Island.IsValidIndex(Center.index()));
+        check(Map.IsValidIndex(Center.GetIndex()));
 
         float value = params.Value;
         const float radius = params.Radius;
@@ -341,7 +206,7 @@ public:
         TSet<FCell*> ExclusionSet;
 
         Center.Value = FMath::Min(Center.Value+value, 1.f);
-        ExclusionSet.Reserve(Island.Num());
+        ExclusionSet.Reserve(Map.Num());
         ExclusionSet.Emplace(&Center);
         cellQ.Enqueue(&Center);
 
@@ -352,14 +217,15 @@ public:
 
             if (bRadial)
                 value = cell->Value;
+
             value *= radius;
 
-            FGraph* g( cell->Graph() );
+            FGraph* g = cell->GetEdge();
             check(g);
 
             do
             {
-                FCell* n( Island.Cell(g) );
+                FCell* n = Map.GetCellNeighbour(g);
 
                 if (! n) continue;
                 if (ExclusionSet.Contains(n)) continue;
@@ -387,22 +253,22 @@ public:
         }
     }
 
-    FORCEINLINE static void AddRadialFill(FJCVIsland& Island, FCell& Center, const FRadialFill& Params, int32 Seed)
+    FORCEINLINE static void AddRadialFill(FJCVDiagramMap& Map, FCell& Center, const FRadialFill& Params, int32 Seed)
     {
         FRandomStream rand(Seed);
-        AddRadialFill(Island, Center, Params, rand);
+        AddRadialFill(Map, Center, Params, rand);
     }
 
-    static void MarkFeatures(FJCVIsland& Island, const FTraits& Cond, FJCVCellSet& ExclusionSet)
+    static void MarkFeatures(FJCVDiagramMap& Map, const FTraits& Cond, FJCVCellSet& ExclusionSet)
     {
-        if (Island.IsEmpty())
+        if (Map.IsEmpty())
         {
             return;
         }
 
         TQueue<FCell*> cellQ;
 
-        const int32 cellN = Island.Num();
+        const int32 cellN = Map.Num();
         int32 f = 0;
         int32 n;
 
@@ -413,56 +279,186 @@ public:
 
             // Find single unmarked cell
             for (int32 i=0; i<cellN; ++i)
-                if (Cond.canSeed(Island[i]))
-                    c = &Island[i];
+                if (Cond.canSeed(Map.GetCell(i)))
+                    c = &Map.GetCell(i);
 
             if (c)
-                n = MarkFeature(Island, cellQ, ExclusionSet, *c, f++, Cond);
+                n = MarkFeature(Map, cellQ, ExclusionSet, *c, f++, Cond);
         }
         // Loop until there is no undefined cell left or no conversion made
         while (n > 0);
     }
 
-    static void MarkFeatures(FJCVIsland& Island, const FSite& Seed, const FTraits& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet)
+    static void MarkFeatures(FJCVDiagramMap& Map, const FSite& Seed, const FTraits& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet)
     {
-        if (Island.IsEmpty())
+        if (Map.IsEmpty())
         {
             return;
         }
 
-        const FSite* s( &Seed );
-        FCell* c( Island.Cell(s) );
+        const FSite* s = &Seed;
+        FCell* c = Map.GetCell(s);
 
         if (c)
         {
             TQueue<FCell*> cellQ;
-            MarkFeature(Island, cellQ, ExclusionSet, *c, FeatureIndex, Cond);
+            MarkFeature(Map, cellQ, ExclusionSet, *c, FeatureIndex, Cond);
         }
     }
 
-    FORCEINLINE static void MarkFeatures(FJCVIsland& Island, const FTraits& Cond)
+    FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FTraits& Cond)
     {
         TSet<FCell*> ExclusionSet;
-        ExclusionSet.Reserve(Island.Num());
-        MarkFeatures(Island, Cond, ExclusionSet);
+        ExclusionSet.Reserve(Map.Num());
+        MarkFeatures(Map, Cond, ExclusionSet);
     }
 
-    FORCEINLINE static void MarkFeatures(FJCVIsland& Island, const FSite& Seed, const FTraits& Cond, int32 FeatureIndex)
+    FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FSite& Seed, const FTraits& Cond, int32 FeatureIndex)
     {
         TSet<FCell*> ExclusionSet;
-        ExclusionSet.Reserve(Island.Num());
-        MarkFeatures(Island, Seed, Cond, FeatureIndex, ExclusionSet);
+        ExclusionSet.Reserve(Map.Num());
+        MarkFeatures(Map, Seed, Cond, FeatureIndex, ExclusionSet);
     }
 
-    FORCEINLINE static void ApplyValueByFeatures(FJCVIsland& Island, const FTraits& Cond, float Value)
+    FORCEINLINE static void ApplyValueByFeatures(FJCVDiagramMap& Map, const FTraits& Cond, float Value)
     {
-        for (int32 i=0; i<Island.Num(); ++i)
+        for (int32 i=0; i<Map.Num(); ++i)
         {
-            FCell& c( Island[i] );
+            FCell& c( Map.GetCell(i) );
             if (Cond.test(c))
                 c.Value = Value;
         }
     }
 
-};
+    static float GetClosestDistanceFromCellSq(
+        FJCVDiagramMap& Map,
+        const FJCVCell& OriginCell,
+        uint8 FeatureType,
+        int32 FeatureIndex = -1,
+        bool bAgainstAnyType = false
+        )
+    {
+        check(Map.HasFeatureType(FeatureType));
+        check(Map.IsValidCell(&OriginCell));
 
+        const FVector2D Origin = OriginCell.ToVector2D();
+        float DistanceToFeatureSq = BIG_NUMBER;
+
+        TFunctionRef<void(FJCVCell& Cell)> CellCallback(
+            [&](FJCVCell& Cell)
+            {
+                const FVector2D CellPoint = Cell.ToVector2D();
+                const float CellDistSq = (CellPoint-Origin).SizeSquared();
+
+                if (CellDistSq < DistanceToFeatureSq)
+                {
+                    DistanceToFeatureSq = CellDistSq;
+                }
+            } );
+
+        if (bAgainstAnyType)
+        {
+            Map.VisitCells(CellCallback, &OriginCell);
+        }
+        else
+        {
+            Map.VisitFeatureCells(CellCallback, FeatureType, FeatureIndex);
+        }
+
+        return DistanceToFeatureSq;
+    }
+
+    static float GetFurthestDistanceFromCellSq(
+        FJCVDiagramMap& Map,
+        const FJCVCell& OriginCell,
+        uint8 FeatureType,
+        int32 FeatureIndex = -1,
+        bool bAgainstAnyType = false
+        )
+    {
+        check(Map.HasFeatureType(FeatureType));
+        check(Map.IsValidCell(&OriginCell));
+
+        const FVector2D Origin = OriginCell.ToVector2D();
+        float DistanceToFeatureSq = TNumericLimits<float>::Min();
+
+        TFunctionRef<void(FJCVCell& Cell)> CellCallback(
+            [&](FJCVCell& Cell)
+            {
+                const FVector2D CellPoint = Cell.ToVector2D();
+                const float CellDistSq = (CellPoint-Origin).SizeSquared();
+
+                if (CellDistSq > DistanceToFeatureSq)
+                {
+                    DistanceToFeatureSq = CellDistSq;
+                }
+            } );
+
+        if (bAgainstAnyType)
+        {
+            Map.VisitCells(CellCallback, &OriginCell);
+        }
+        else
+        {
+            Map.VisitFeatureCells(CellCallback, FeatureType, FeatureIndex);
+        }
+
+        return DistanceToFeatureSq;
+    }
+
+    FORCEINLINE static float GetClosestDistanceFromCell(
+        FJCVDiagramMap& Map,
+        const FJCVCell& OriginCell,
+        uint8 FeatureType,
+        int32 FeatureIndex = -1,
+        bool bAgainstAnyType = false
+        )
+    {
+        return FMath::Sqrt(GetClosestDistanceFromCellSq(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType));
+    }
+
+    FORCEINLINE static float GetFurthestDistanceFromCell(
+        FJCVDiagramMap& Map,
+        const FJCVCell& OriginCell,
+        uint8 FeatureType,
+        int32 FeatureIndex = -1,
+        bool bAgainstAnyType = false
+        )
+    {
+        return FMath::Sqrt(GetFurthestDistanceFromCellSq(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType));
+    }
+
+    static void MapNormalizedDistanceFromCell(
+        FJCVDiagramMap& Map,
+        const FJCVCell& OriginCell,
+        uint8 FeatureType,
+        int32 FeatureIndex = -1,
+        bool bAgainstAnyType = false
+        )
+    {
+        check(Map.HasFeatureType(FeatureType));
+        check(Map.IsValidCell(&OriginCell));
+
+        const FVector2D Origin = OriginCell.ToVector2D();
+        const float FurthestDistanceFromCell = GetFurthestDistanceFromCell(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType);
+        const float InvDistanceFromCell = 1.f / FMath::Max(FurthestDistanceFromCell, KINDA_SMALL_NUMBER);
+
+        TFunctionRef<void(FJCVCell&)> CellCallback(
+            [&](FJCVCell& Cell)
+            {
+                const FVector2D CellPoint = Cell.ToVector2D();
+                const float CellDist = (CellPoint-Origin).Size();
+
+                Cell.SetValue(CellDist * InvDistanceFromCell);
+            } );
+
+        if (bAgainstAnyType)
+        {
+            Map.VisitCells(CellCallback, &OriginCell);
+        }
+        else
+        {
+            Map.VisitFeatureCells(CellCallback, FeatureType, FeatureIndex);
+        }
+    }
+};

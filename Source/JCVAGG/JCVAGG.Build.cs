@@ -23,31 +23,30 @@
 // THE SOFTWARE.
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
+/*
+ JCVAGG 0.0.1
+ -----
+ 
+*/
+using UnrealBuildTool;
 
-#pragma once
-
-#include "ModuleManager.h"
-
-class IJCVoronoiPlugin : public IModuleInterface
+public class JCVAGG : ModuleRules
 {
-public:
-
-	FORCEINLINE static IJCVoronoiPlugin& Get()
+	public JCVAGG(ReadOnlyTargetRules Target) : base(Target)
 	{
-		return FModuleManager::GetModuleChecked<IJCVoronoiPlugin>("JCVoronoiPlugin");
-	}
+        PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-	FORCEINLINE static bool IsAvailable()
-	{
-        return FModuleManager::Get().IsModuleLoaded("JCVoronoiPlugin");
-	}
+		PublicDependencyModuleNames.AddRange(
+            new string[] {
+                "Core",
+                "CoreUObject",
+                "Engine"
+            });
 
-	virtual bool IsGameModule() const override
-	{
-		return true;
+		PublicDependencyModuleNames.AddRange(
+            new string[] {
+                "JCVoronoiPlugin",
+                "AGGPlugin"
+            });
 	}
-};
-
-DECLARE_LOG_CATEGORY_EXTERN(LogJCV, Verbose, All);
-DECLARE_STATS_GROUP(TEXT("JCVoronoiPlugin"), STATGROUP_JCVoronoiPlugin, STATCAT_Advanced);
+}

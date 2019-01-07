@@ -1,3 +1,28 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// MIT License
+// 
+// Copyright (c) 2018-2019 Nuraga Wiswakarma
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
 // 
 
 #pragma once
@@ -8,17 +33,20 @@
 
 typedef jcv_diagram     FJCVDiagram;
 typedef jcv_site        FJCVSite;
-typedef jcv_graphedge   FJCVGraphEdge;
+typedef jcv_graphedge   FJCVEdge;
 typedef jcv_point       FJCVPoint;
 
 class FJCVDiagramContext
 {
-    typedef TSharedPtr<FJCVDiagram> TPSDiagram;
-    typedef TWeakPtr<FJCVDiagram>   TPWDiagram;
+    typedef TSharedPtr<FJCVDiagram> FPSDiagram;
+    typedef TWeakPtr<FJCVDiagram>   FPWDiagram;
 
-    TPSDiagram Diagram;
-    FBox2D DiagramExtents;
+    FPSDiagram Diagram;
+    FBox2D DiagramBounds;
     const FJCVSite* Sites;
+
+    FJCVDiagramContext(const FJCVDiagramContext& Other) = default;
+    FJCVDiagramContext& operator=(const FJCVDiagramContext& Other) = default;
 
 public:
 
@@ -27,10 +55,10 @@ public:
         ResetDiagram();
     }
 
-    FJCVDiagramContext(FBox2D Extents, TArray<FVector2D>& Points)
+    FJCVDiagramContext(FBox2D Bounds, TArray<FVector2D>& Points)
     {
         ResetDiagram();
-        GenerateDiagram(Extents, Points);
+        GenerateDiagram(Bounds, Points);
     }
 
     FJCVDiagramContext(FVector2D Size, TArray<FVector2D>& Points)
@@ -41,7 +69,7 @@ public:
 
     void ResetDiagram()
     {
-        Diagram = TPSDiagram( new FJCVDiagram(), [=](FJCVDiagram* d){
+        Diagram = FPSDiagram( new FJCVDiagram(), [=](FJCVDiagram* d){
             if (d->internal)
                 jcv_diagram_free(d);
         } );
@@ -54,50 +82,66 @@ public:
         GenerateDiagram(FBox2D(FVector2D(0.f, 0.f), Size), InOutPoints);
     }
 
-    void GenerateDiagram(FBox2D Extents, TArray<FVector2D>& InOutPoints)
+    void GenerateDiagram(FBox2D Bounds, TArray<FVector2D>& InOutPoints)
     {
-        check(Extents.bIsValid);
+        check(Bounds.bIsValid);
         check(Diagram.IsValid());
         
         if (InOutPoints.Num() == 0)
             return;
 
-        DiagramExtents = Extents;
+        DiagramBounds = Bounds;
 
-        jcv_rect ext;
-        ext.min.x = Extents.Min.X;
-        ext.min.y = Extents.Min.Y;
-        ext.max.x = Extents.Max.X;
-        ext.max.y = Extents.Max.Y;
-        const int32 pointCount = InOutPoints.Num();
+        jcv_rect JCVBounds;
+        JCVBounds.min.x = Bounds.Min.X;
+        JCVBounds.min.y = Bounds.Min.Y;
+        JCVBounds.max.x = Bounds.Max.X;
+        JCVBounds.max.y = Bounds.Max.Y;
 
-        FJCVPoint* points = nullptr;
+        const int32 PointCount = InOutPoints.Num();
+
+        FJCVPoint* Points = nullptr;
         {
-            void* p_points = FMemory::Malloc(sizeof(FJCVPoint) * pointCount);
-            points = static_cast<FJCVPoint*>( p_points );
-            if (! points)
+            void* p_points = FMemory::Malloc(sizeof(FJCVPoint) * PointCount);
+            Points = static_cast<FJCVPoint*>( p_points );
+            if (! Points)
                 return;
 
             // Memcpy if point/vector data size are equals
             if (sizeof(FJCVPoint) == InOutPoints.GetTypeSize())
             {
-                FMemory::Memcpy(points, InOutPoints.GetData(), pointCount*InOutPoints.GetTypeSize());
+                FMemory::Memcpy(Points, InOutPoints.GetData(), PointCount*InOutPoints.GetTypeSize());
             }
             // Otherwise, standard array assign
             else
             {
-                for (int32 i=0; i<pointCount; ++i)
+                for (int32 i=0; i<PointCount; ++i)
                 {
-                    points[i].x = InOutPoints[i].X;
-                    points[i].y = InOutPoints[i].Y;
+                    Points[i].x = InOutPoints[i].X;
+                    Points[i].y = InOutPoints[i].Y;
                 }
             }
         }
-        jcv_diagram_generate_useralloc(pointCount, points, &ext, 0, jcv_alloc_fn, jcv_free_fn, Diagram.Get());
+
+        jcv_diagram_generate_useralloc(
+            PointCount,
+            Points,
+            &JCVBounds,
+            0,
+            jcv_alloc_fn,
+            jcv_free_fn,
+            Diagram.Get()
+            );
+
         Sites = jcv_diagram_get_sites(Diagram.Get());
-        FMemory::Free(points);
+        FMemory::Free(Points);
     }
 
+    /**
+     * Find a site that contain the specified point.
+     *
+     * Return a valid site if found. Otherwise, return nullptr.
+     */
     FORCEINLINE const FJCVSite* Find(const FVector2D& pos) const
     {
         const FJCVSite* s = FindClosest(pos);
@@ -106,11 +150,48 @@ public:
         return nullptr;
     }
 
+    /**
+     * Find a site that contain the specified point.
+     * Search is started at specified site.
+     *
+     * Return a valid site if found. Otherwise, return nullptr.
+     */
+    const FJCVSite* FindFrom(const FVector2D& pos, const FJCVSite& s) const
+    {
+        if (IsEmpty())
+        {
+            return nullptr;
+        }
+
+        const FJCVPoint p( FJCVMathUtil::ToPt(pos) );
+        const FJCVSite* s0 = nullptr;
+        const FJCVSite* s1 = &s;
+
+        while (s1)
+        {
+            s0 = s1;
+            s1 = FindCloser(*s0, p);
+        }
+
+        if (s0)
+        {
+            return Find(pos, *s0);
+        }
+
+        return nullptr;
+    }
+
+    /**
+     * Find a site that contain the specified point.
+     * Search is started with at specified site.
+     *
+     * Return a valid site if found. Otherwise, return nullptr.
+     */
     const FJCVSite* Find(const FVector2D& pos, const FJCVSite& s) const
     {
         if (IsWithin(s, pos))
             return &s;
-        const FJCVGraphEdge* g = s.edges;
+        const FJCVEdge* g = s.edges;
         if (g)
         do
         {
@@ -119,18 +200,20 @@ public:
                 return n;
         }
         while ((g=g->next) != nullptr);
-        return FindCloser(s, FJCVMathUtil::AsPt(pos));
+        return FindCloser(s, FJCVMathUtil::ToPt(pos));
     }
 
     template<class ContainerType>
-    void FindAllTo(const FVector2D& pos, const FJCVSite& s, ContainerType& OutSites) const
+    const FJCVSite* FindAllTo(const FVector2D& pos, const FJCVSite& s, ContainerType& OutSites) const
     {
+        // Point is within starting search site, return immediately
         if (IsWithin(s, pos))
         {
             OutSites.Emplace(&s);
-            return;
+            return &s;
         }
-        const FJCVGraphEdge* g = s.edges;
+
+        const FJCVEdge* g = s.edges;
         // Point is not within site, search neighbours
         if (g)
         do
@@ -139,19 +222,27 @@ public:
             if (n && IsWithin(*n, pos))
             {
                 OutSites.Emplace(n);
-                return;
+                return n;
             }
         }
         while ((g=g->next) != nullptr);
+
         // Point is not within site or its neighbour, expand search
-        const FJCVSite* closerSite = FindCloser(s, FJCVMathUtil::AsPt(pos));
+        const FJCVSite* closerSite = FindCloser(s, FJCVMathUtil::ToPt(pos));
         if (closerSite)
         {
             OutSites.Emplace(closerSite);
-            FindAllTo(pos, *closerSite, OutSites);
+            return FindAllTo(pos, *closerSite, OutSites);
         }
+
+        return nullptr;
     }
 
+    /**
+     * Find a site which origin is closest to the specified point.
+     *
+     * Return a valid site if found. Otherwise, return nullptr.
+     */
     const FJCVSite* FindClosest(const FVector2D& pos) const
     {
         if (IsEmpty())
@@ -159,7 +250,7 @@ public:
             return nullptr;
         }
 
-        const FJCVPoint p( FJCVMathUtil::AsPt(pos) );
+        const FJCVPoint p( FJCVMathUtil::ToPt(pos) );
         const FJCVSite* s0 = nullptr;
         const FJCVSite* s1 = GetSites();
 
@@ -172,10 +263,16 @@ public:
         return s0;
     }
 
+    /**
+     * Find a site which origin is closer to the specified point than the
+     * specified site origin.
+     *
+     * Return a valid site if found. Otherwise, return nullptr.
+     */
     const FJCVSite* FindCloser(const FJCVSite& s0, const FJCVPoint& p) const
     {
         const FJCVSite* s1 = nullptr;
-        const FJCVGraphEdge* e = s0.edges;
+        const FJCVEdge* e = s0.edges;
         float d0 = FJCVMathUtil::DistSqr(s0.p, p);
         while (e)
         {
@@ -193,9 +290,121 @@ public:
         return s1;
     }
 
+    template<class ContainerType>
+    void FindAllWithin(const FBox2D& r, const FJCVSite& s, ContainerType& OutSites) const
+    {
+        if (! r.bIsValid)
+        {
+            return;
+        }
+
+        bool bStartOnMin = IsWithin(s, r.Min);
+        bool bStartOnMax = IsWithin(s, r.Max);
+
+        if (bStartOnMin && bStartOnMax)
+        {
+            OutSites.Emplace(&s);
+            return;
+        }
+
+        TSet<const FJCVSite*> SiteSet;
+        TQueue<const FJCVSite*> SiteQueue;
+
+        // Find rect border cells
+
+        if (bStartOnMin)
+        {
+            const FJCVSite* Search = &s;
+            Search = FindAllTo(FVector2D(r.Max.X, r.Min.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Max.X, r.Max.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Min.X, r.Max.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Min.X, r.Min.Y), *Search, SiteSet);
+        }
+        else if (bStartOnMax)
+        {
+            const FJCVSite* Search = &s;
+            Search = FindAllTo(FVector2D(r.Min.X, r.Max.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Min.X, r.Min.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Max.X, r.Min.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Max.X, r.Max.Y), *Search, SiteSet);
+        }
+        else
+        {
+            const FJCVSite* Search = FindClosest(r.Min);
+            Search = FindAllTo(FVector2D(r.Max.X, r.Min.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Max.X, r.Max.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Min.X, r.Max.Y), *Search, SiteSet);
+            Search = FindAllTo(FVector2D(r.Min.X, r.Min.Y), *Search, SiteSet);
+        }
+
+        // Enqueue site expand search
+
+        for (const FJCVSite* Site : SiteSet)
+        {
+            SiteQueue.Enqueue(Site);
+        }
+
+        TSet<const FJCVSite*> VisitedSiteSet(SiteSet);
+
+        // Boundary expand search
+
+        while (! SiteQueue.IsEmpty())
+        {
+            const FJCVSite* Site;
+            SiteQueue.Dequeue(Site);
+
+            check(Site);
+
+            if (const FJCVEdge* g = Site->edges)
+            do
+            {
+                const FJCVSite* n = g->neighbor;
+
+                // Skip invalid site or registered site
+                if (! n || VisitedSiteSet.Contains(n))
+                {
+                    continue;
+                }
+
+                // Mark visited
+                VisitedSiteSet.Emplace(n);
+
+                // Check if site center is within rect
+                if (r.IsInside(FJCVMathUtil::ToVector2D(n->p)))
+                {
+                    SiteSet.Emplace(n);
+                    SiteQueue.Enqueue(n);
+                }
+                // Check if site edge points is within rect
+                else
+                {
+                    if (const FJCVEdge* ng = n->edges)
+                    do
+                    {
+                        if (r.IsInside(FJCVMathUtil::ToVector2D(ng->pos[0])))
+                        {
+                            SiteSet.Emplace(n);
+                            SiteQueue.Enqueue(n);
+                            break;
+                        }
+                    }
+                    while ((ng=ng->next) != nullptr);
+                }
+            }
+            while ((g=g->next) != nullptr);
+        }
+
+        OutSites.Reserve(SiteSet.Num());
+
+        for (const FJCVSite* Site : SiteSet)
+        {
+            OutSites.Emplace(Site);
+        }
+    }
+
     FORCEINLINE bool IsWithin(const FJCVSite& s, const FVector2D& pos) const
     {
-        const FJCVGraphEdge* g = s.edges;
+        const FJCVEdge* g = s.edges;
         const FJCVPoint& sp( s.p );
         if (g)
         do
@@ -209,12 +418,89 @@ public:
 
     FORCEINLINE void GetPoints(const FJCVSite& s, TArray<FJCVPoint>& pts) const
     {
-        const FJCVGraphEdge* g = s.edges;
+        if (const FJCVEdge* g = s.edges)
         do
         {
             pts.Emplace(g->pos[0]);
         }
         while ((g=g->next) != nullptr);
+    }
+
+    FORCEINLINE void GetPoints(const FJCVSite& s, TArray<FVector2D>& pts) const
+    {
+        if (const FJCVEdge* g = s.edges)
+        do
+        {
+            pts.Emplace(FJCVMathUtil::ToVector2D(g->pos[0]));
+        }
+        while ((g=g->next) != nullptr);
+    }
+
+    FORCEINLINE void GetSiteBounds(const FJCVSite& s, FBox2D& Bounds) const
+    {
+        Bounds.Init();
+        if (const FJCVEdge* g = s.edges)
+        do
+        {
+            Bounds += FJCVMathUtil::ToVector2D(g->pos[0]);
+        }
+        while ((g=g->next) != nullptr);
+    }
+
+    template<class ContainerType>
+    FORCEINLINE void GetNeighbours(const FJCVSite& s, ContainerType& OutSites) const
+    {
+        if (const FJCVEdge* g = s.edges)
+        do
+        {
+            if (g->neighbor)
+            {
+                OutSites.Emplace(g->neighbor);
+            }
+        }
+        while ((g=g->next) != nullptr);
+    }
+
+    template<class FCallback>
+    FORCEINLINE void VisitNeighbours(const FJCVSite& s, const FCallback& Callback) const
+    {
+        if (const FJCVEdge* g = s.edges)
+        do
+        {
+            if (g->neighbor)
+            {
+                Callback(g->neighbor);
+            }
+        }
+        while ((g=g->next) != nullptr);
+    }
+
+    FORCEINLINE float GetShortestMidPoint(const FJCVSite& s, FVector2D& OutPoint) const
+    {
+        FVector2D sp(s.p.x, s.p.y);
+        float ShortestDistSq = BIG_NUMBER;
+        if (const FJCVEdge* g = s.edges)
+        do
+        {
+            const FJCVPoint& gp0(g->pos[0]);
+            const FJCVPoint& gp1(g->pos[1]);
+            FVector2D gpm(gp0.x+(gp1.x-gp0.x)*0.5, gp0.y+(gp1.y-gp0.y)*0.5);
+            float gpmDistSq = (gpm-sp).SizeSquared();
+
+            if (gpmDistSq < ShortestDistSq)
+            {
+                ShortestDistSq = gpmDistSq;
+                OutPoint = gpm;
+            }
+        }
+        while ((g=g->next) != nullptr);
+        return ShortestDistSq;
+    }
+
+    FORCEINLINE float GetShortestMidPoint(const FJCVSite& s) const
+    {
+        FVector2D MidPt;
+        return GetShortestMidPoint(s, MidPt);
     }
 
     FORCEINLINE bool pntri(float px, float py, const FJCVPoint& p0, const FJCVPoint& p1, const FJCVPoint& p2) const
@@ -282,14 +568,14 @@ public:
         return Sites[i];
     }
 
-    FORCEINLINE const FJCVGraphEdge* Graph(int32 i) const
+    FORCEINLINE const FJCVEdge* Graph(int32 i) const
     {
         return Site(i).edges;
     }
 
-    FORCEINLINE const FBox2D& GetExtents() const
+    FORCEINLINE const FBox2D& GetDiagramBounds() const
     {
-        return DiagramExtents;
+        return DiagramBounds;
     }
 
 private:
@@ -305,6 +591,4 @@ private:
         (void) memctx;
         FMemory::Free(p);
     }
-
 };
-

@@ -25,29 +25,23 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 
-#pragma once
+#include "JCVAGG.h"
 
-#include "ModuleManager.h"
+#define LOCTEXT_NAMESPACE "FJCVAGG"
 
-class IJCVoronoiPlugin : public IModuleInterface
+void FJCVAGG::StartupModule()
 {
-public:
+	// This code will execute after your module is loaded into memory; the exact timing is specified in the .uplugin file per-module
+	
+}
 
-	FORCEINLINE static IJCVoronoiPlugin& Get()
-	{
-		return FModuleManager::GetModuleChecked<IJCVoronoiPlugin>("JCVoronoiPlugin");
-	}
+void FJCVAGG::ShutdownModule()
+{
+	// This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
+	// we call this function before unloading the module.
+	
+}
 
-	FORCEINLINE static bool IsAvailable()
-	{
-        return FModuleManager::Get().IsModuleLoaded("JCVoronoiPlugin");
-	}
+#undef LOCTEXT_NAMESPACE
 
-	virtual bool IsGameModule() const override
-	{
-		return true;
-	}
-};
-
-DECLARE_LOG_CATEGORY_EXTERN(LogJCV, Verbose, All);
-DECLARE_STATS_GROUP(TEXT("JCVoronoiPlugin"), STATGROUP_JCVoronoiPlugin, STATCAT_Advanced);
+IMPLEMENT_MODULE(FJCVAGG, JCVAGG)

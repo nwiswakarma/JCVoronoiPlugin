@@ -19,6 +19,7 @@ LICENSE:
 	The MIT License (MIT)
 
 	Copyright (c) 2015 Mathias Westerdahl
+	Copyright (c) 2017 Nuraga Wiswakarma
 
 	Permission is hereby granted, free of charge, to any person obtaining a copy
 	of this software and associated documentation files (the "Software"), to deal
@@ -227,13 +228,6 @@ typedef struct _jcv_diagram
 
 #pragma pack(pop)
 
-
-/** 
- * Uses malloc
- * If rect is null, an automatic bounding box is calculated, with an extra padding of 10 units
- * If rect is non null, all points will be culled against the bounding rect, and all edges will be clipped against it.
- */
-extern void jcv_diagram_generate( int num_points, const jcv_point* points, const jcv_rect* rect, jcv_diagram* diagram );
 
 typedef void* (*FJCVAllocFn)(void* userctx, size_t size);
 typedef void (*FJCVFreeFn)(void* userctx, void* p);
