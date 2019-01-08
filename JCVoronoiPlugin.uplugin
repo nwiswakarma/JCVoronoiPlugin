@@ -15,19 +15,6 @@
 			"Type" : "Runtime",
 			"LoadingPhase" : "Default",
 			"WhitelistPlatforms" : [ "Win64", "Win32", "Mac" ]
-		},
-		{
-			"Name" : "JCVAGG",
-			"Type" : "Runtime",
-			"LoadingPhase" : "Default",
-			"WhitelistPlatforms" : [ "Win64", "Win32", "Mac" ]
-		}
-	],
-	"Plugins":
-    [
-		{
-			"Name" : "AGGPlugin",
-			"Enabled": true
 		}
 	]
 }

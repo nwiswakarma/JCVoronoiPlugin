@@ -780,7 +780,7 @@ TArray<int32> UJCVDiagramAccessor::GetRandomCells(int32 Count, FJCVFeatureId Fea
         }
     }
 
-    return MoveTemp( indexSet.Array() );
+    return indexSet.Array();
 }
 
 int32 UJCVDiagramAccessor::GetClosestCellAt(const FVector2D& Pos) const
