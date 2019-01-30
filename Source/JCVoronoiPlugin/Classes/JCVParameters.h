@@ -28,45 +28,112 @@
 #pragma once
 
 #include "CoreUObject.h"
+#include "JCVDiagramMap.h"
 #include "JCVParameters.generated.h"
 
-USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVDiagramMapID
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVFeatureId
 {
 	GENERATED_BODY()
 
-    /**
-     * Island Context ID
-     */
-	UPROPERTY(Category = "Island ID", BlueprintReadWrite, EditAnywhere)
-    int32 ContextID = -1;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    uint8 Type;
 
-    /**
-     * Island ID
-     */
-	UPROPERTY(Category = "Island ID", BlueprintReadWrite, EditAnywhere)
-    int32 IslandID = 0;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Index;
+
+    FJCVFeatureId() = default;
+
+    FJCVFeatureId(uint8 InType, int32 InIndex)
+        : Type(InType)
+        , Index(InIndex)
+    {
+    }
 };
 
 USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVRadialFillParams
+struct JCVORONOIPLUGIN_API FJCVRadialFill
 {
 	GENERATED_BODY()
 
-	UPROPERTY(Category="Radial Fill", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
     float Value = .5f;
 
-	UPROPERTY(Category="Radial Fill", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
     float Radius = .85f;
 
-	UPROPERTY(Category="Radial Fill", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
     float Sharpness = 0.f;
 
-	UPROPERTY(Category="Radial Fill", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    UCurveFloat* ValueCurve = nullptr;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
     bool bRadialDegrade = true;
 
-	UPROPERTY(Category="Radial Fill", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
     bool bFilterBorder = true;
+};
+
+USTRUCT(BlueprintType, Blueprintable)
+struct JCVORONOIPLUGIN_API FJCVCellTraits
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+    uint8 TestType = 255;
+
+	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+    uint8 FeatureType;
+
+    FJCVCellTraits() = default;
+
+    FJCVCellTraits(uint8 f)
+        : FeatureType(f)
+    {
+    }
+
+    FJCVCellTraits(uint8 t, uint8 f)
+        : TestType(t)
+        , FeatureType(f)
+    {
+    }
+
+    FORCEINLINE virtual bool HasValidFeature(const FJCVCell& c) const
+    {
+        return c.FeatureType == TestType;
+    }
+
+    FORCEINLINE virtual bool HasUndefinedType(const FJCVCell& c) const
+    {
+        return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
+    }
+};
+
+USTRUCT(BlueprintType, Blueprintable)
+struct JCVORONOIPLUGIN_API FJCVValueTraits : public FJCVCellTraits
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+    float ValueLo;
+
+	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+    float ValueHi;
+
+    FJCVValueTraits() = default;
+
+    FJCVValueTraits(float l, float v, uint8 f)
+        : FJCVCellTraits(f)
+        , ValueLo(l)
+        , ValueHi(v)
+    {
+    }
+
+    FORCEINLINE virtual bool HasValidFeature(const FJCVCell& c) const override
+    {
+        return c.Value > ValueLo && c.Value < ValueHi;
+    }
 };
 
 USTRUCT(BlueprintType, Blueprintable)
@@ -74,61 +141,15 @@ struct JCVORONOIPLUGIN_API FJCVOrogenParams
 {
 	GENERATED_BODY()
 
-	UPROPERTY(Category = "Orogen Settings", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     float OriginThreshold = .1f;
 
-	UPROPERTY(Category = "Orogen Settings", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     float AreaThreshold = .01f;
 
-	UPROPERTY(Category = "Orogen Settings", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     uint8 FeatureType = 1;
 
-	UPROPERTY(Category = "Orogen Settings", BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     bool bDivergentAsConvergent = false;
-};
-
-USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVCellTraitsParams
-{
-	GENERATED_BODY()
-
-	UPROPERTY(Category = "Cell Traits", BlueprintReadWrite, EditAnywhere)
-    uint8 TestType = 255;
-
-	UPROPERTY(Category = "Cell Traits", BlueprintReadWrite, EditAnywhere)
-    uint8 FeatureType;
-
-    FJCVCellTraitsParams() = default;
-
-    FJCVCellTraitsParams(uint8 f)
-        : FeatureType(f)
-    {
-    }
-
-    FJCVCellTraitsParams(uint8 t, uint8 f)
-        : TestType(t)
-        , FeatureType(f)
-    {
-    }
-};
-
-USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVValueTraitsParams : public FJCVCellTraitsParams
-{
-	GENERATED_BODY()
-
-	UPROPERTY(Category = "Cell Traits", BlueprintReadWrite, EditAnywhere)
-    float ValueLo;
-
-	UPROPERTY(Category = "Cell Traits", BlueprintReadWrite, EditAnywhere)
-    float ValueHi;
-
-    FJCVValueTraitsParams() = default;
-
-    FJCVValueTraitsParams(float l, float v, uint8 f)
-        : FJCVCellTraitsParams(f)
-        , ValueLo(l)
-        , ValueHi(v)
-    {
-    }
 };

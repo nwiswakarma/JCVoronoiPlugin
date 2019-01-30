@@ -111,9 +111,12 @@ struct FJCVCell
 
     FORCEINLINE FVector2D ToVector2D() const
     {
-        return IsValid()
-            ? FVector2D(Site->p.x, Site->p.y)
-            : FVector2D::ZeroVector;
+        return IsValid() ? ToVector2DUnsafe() : FVector2D::ZeroVector;
+    }
+
+    FORCEINLINE FVector2D ToVector2DUnsafe() const
+    {
+        return FVector2D(Site->p.x, Site->p.y);
     }
 
     FORCEINLINE FJCVEdge* GetEdge() const

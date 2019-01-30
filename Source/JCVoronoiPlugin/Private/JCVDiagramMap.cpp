@@ -37,11 +37,39 @@ FJCVDiagramMap::FJCVDiagramMap(FJCVDiagramContext& d, uint8 FeatureType, int32 F
     Init(FeatureType, FeatureIndex);
 }
 
-FJCVDiagramMap::FJCVDiagramMap(const FJCVDiagramMap& SourceMap)
-    : Diagram(SourceMap.Diagram)
-    , Cells(SourceMap.Cells)
-    , FeatureGroups(SourceMap.FeatureGroups)
+FJCVDiagramMap::FJCVDiagramMap(const FJCVDiagramMap& SrcMap)
+    : Diagram(SrcMap.Diagram)
 {
+    // Copy cells
+
+    Cells = SrcMap.Cells;
+
+    // Copy feature groups
+
+    const int32 FeatureGroupCount = SrcMap.GetFeatureCount();
+    FeatureGroups.SetNum(FeatureGroupCount);
+
+    for (int32 fgi=0; fgi<FeatureGroupCount; ++fgi)
+    {
+        const FJCVFeatureGroup& SrcFeatureGroup(*SrcMap.GetFeatureGroup(fgi));
+        FJCVFeatureGroup& DstFeatureGroup(FeatureGroups[fgi]);
+
+        const int32 CellGroupCount = SrcFeatureGroup.CellGroups.Num();
+        DstFeatureGroup.CellGroups.SetNum(CellGroupCount);
+
+        for (int32 cgi=0; cgi<CellGroupCount; ++cgi)
+        {
+            const FJCVCellGroup& SrcCellGroup(SrcFeatureGroup.CellGroups[cgi]);
+            FJCVCellGroup& DstCellGroup(DstFeatureGroup.CellGroups[cgi]);
+
+            DstCellGroup.SetNumUninitialized(SrcCellGroup.Num());
+
+            for (int32 ci=0; ci<SrcCellGroup.Num(); ++ci)
+            {
+                DstCellGroup[ci] = GetCell(SrcCellGroup[ci]->Site);
+            }
+        }
+    }
 }
 
 void FJCVDiagramMap::Init(uint8 FeatureType, int32 FeatureIndex)

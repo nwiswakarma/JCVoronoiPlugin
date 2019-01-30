@@ -32,7 +32,7 @@
 
 // MARK FEATURE FUNCTIONS
 
-void UJCVDiagramAccessor::MarkDefaultFeatures(uint8 FeatureType)
+void UJCVDiagramAccessor::MarkUndefinedFeatures(uint8 FeatureType)
 {
     if (HasValidMap())
     {
@@ -41,15 +41,15 @@ void UJCVDiagramAccessor::MarkDefaultFeatures(uint8 FeatureType)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkDefaultFeatures() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkUndefinedFeatures() ABORTED, INVALID ISLAND"));
     }
 }
 
-void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraitsParams TypeTraits)
+void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraits FeatureTraits)
 {
     if (HasValidMap())
     {
-        FJCVValueGenerator::MarkFeatures(*Map, FJCVCellTraits(TypeTraits));
+        FJCVValueGenerator::MarkFeatures(*Map, FeatureTraits);
     }
     else
     {
@@ -57,11 +57,11 @@ void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraitsParams TypeTraits)
     }
 }
 
-void UJCVDiagramAccessor::MarkFeaturesByValue(FJCVValueTraitsParams ValueTraits)
+void UJCVDiagramAccessor::MarkFeaturesByValue(FJCVValueTraits ValueTraits)
 {
     if (HasValidMap())
     {
-        FJCVValueGenerator::MarkFeatures(*Map, FJCVValueTraits(ValueTraits));
+        FJCVValueGenerator::MarkFeatures(*Map, ValueTraits);
     }
     else
     {
@@ -157,7 +157,7 @@ void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVe
     }
 }
 
-void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond)
+void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits)
 {
     if (HasValidMap())
     {
@@ -173,7 +173,6 @@ void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVecto
         }
 
         const FJCVSite* s0 = MapRef->Find(v0);
-        const FJCVCellTraits cond( FilterCond );
 
         if (s0)
         {
@@ -185,7 +184,7 @@ void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVecto
             {
                 FJCVCell* cell = MapRef.GetCell(site);
                 check(cell);
-                if (cell && (!bUseFilter || cond.test(*cell)))
+                if (cell && (!bUseFilter || FilterTraits.HasValidFeature(*cell)))
                 {
                     cell->SetFeature(Value, FeatureId.Type, FeatureId.Index);
                 }
@@ -198,7 +197,7 @@ void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVecto
     }
 }
 
-void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond)
+void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits)
 {
     if (HasValidMap())
     {
@@ -208,7 +207,7 @@ void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID,
         {
             FVector2D v0(MapRef.GetCell(StartCellID).ToVector2D());
             FVector2D v1(MapRef.GetCell(EndCellID).ToVector2D());
-            MarkRange(v0, v1, FeatureId, Value, bUseFilter, FilterCond);
+            MarkRange(v0, v1, FeatureId, Value, bUseFilter, FilterTraits);
         }
         else
         {
@@ -223,6 +222,11 @@ void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID,
 
 // FEATURE UTILITY FUNCTIONS
 
+bool UJCVDiagramAccessor::HasFeature(FJCVFeatureId FeatureId) const
+{
+    return Map ? (Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index) != nullptr) : 0;
+}
+
 int32 UJCVDiagramAccessor::GetFeatureCount() const
 {
     return Map ? Map->GetFeatureCount() : 0;
@@ -231,6 +235,17 @@ int32 UJCVDiagramAccessor::GetFeatureCount() const
 int32 UJCVDiagramAccessor::GetFeatureGroupCount(uint8 FeatureType) const
 {
     return Map ? Map->GetFeatureGroupCount(FeatureType) : 0;
+}
+
+int32 UJCVDiagramAccessor::GetFeatureCellCount(FJCVFeatureId FeatureId) const
+{
+    if (Map)
+    {
+        FJCVCellGroup* FeatureCells = Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index);
+        return FeatureCells ? FeatureCells->Num() : 0;
+    }
+    
+    return 0;
 }
 
 void UJCVDiagramAccessor::ResetFeatures(FJCVFeatureId FeatureId)
@@ -245,11 +260,11 @@ void UJCVDiagramAccessor::ResetFeatures(FJCVFeatureId FeatureId)
     }
 }
 
-void UJCVDiagramAccessor::ApplyValueByFeatures(FJCVCellTraitsParams TypeTraits, float Value)
+void UJCVDiagramAccessor::ApplyValueByFeatures(FJCVCellTraits FeatureTraits, float Value)
 {
     if (HasValidMap())
     {
-        FJCVValueGenerator::ApplyValueByFeatures(*Map, FJCVCellTraits(TypeTraits), Value);
+        FJCVValueGenerator::ApplyValueByFeatures(*Map, FeatureTraits, Value);
     }
     else
     {
@@ -1983,6 +1998,12 @@ float UJCVDiagramAccessor::GetClosestDistanceToFeature(const FJCVCellRef& Origin
         return 0.f;
     }
 
+    if (! Map->HasFeatureType(FeatureId.Type))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID FEATURE TYPE"));
+        return 0.f;
+    }
+
     return FJCVValueGenerator::GetClosestDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, false);
 }
 
@@ -2001,7 +2022,7 @@ float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& Origi
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID ORIGIN CELL"));
         return 0.f;
     }
-    
+
     if (! Map->HasFeatureType(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID FEATURE TYPE"));
@@ -2009,88 +2030,6 @@ float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& Origi
     }
 
     return FJCVValueGenerator::GetFurthestDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, false);
-}
-
-// CELL VALUE FUNCTIONS
-
-void UJCVDiagramAccessor::AddRadialFillAt(const FVector2D& Position, const FJCVRadialFillParams& Params, int32 Seed)
-{
-    if (HasValidMap())
-    {
-        FJCVDiagramMap& isle( *Map );
-        FJCVCell* cell( isle.GetCell(isle->Find(Position)) );
-        if (cell)
-        {
-            FJCVValueGenerator::FRadialFill fillParams(Params);
-            FJCVValueGenerator::AddRadialFill(isle, *cell, fillParams, Seed);
-        }
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::AddRadialFill() ABORTED, INVALID ISLAND"));
-    }
-}
-
-void UJCVDiagramAccessor::AddRadialFillByIndex(int32 CellIndex, const FJCVRadialFillParams& Params, int32 Seed)
-{
-    if (HasValidMap())
-    {
-        FJCVDiagramMap& isle( *Map );
-        if (isle.IsValidIndex(CellIndex))
-        {
-            FJCVCell& cell( isle.GetCell(CellIndex) );
-            FJCVValueGenerator::FRadialFill fillParams(Params);
-            FJCVValueGenerator::AddRadialFill(isle, cell, fillParams, Seed);
-        }
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::AddRadialFill() ABORTED, INVALID ISLAND"));
-    }
-}
-
-void UJCVDiagramAccessor::AddRadialFillNum(int32 PointCount, const FJCVRadialFillParams& Params, int32 Seed, float Padding, float ValueThreshold, int32 MaxPlacementTest)
-{
-    if (HasValidMap())
-    {
-        if (PointCount <= 0)
-        {
-            return;
-        }
-
-        FJCVDiagramMap& MapRef( *Map );
-        FRandomStream Rand(Seed);
-
-        const float tMin = FMath::Clamp(ValueThreshold, 0.f, 1.f);
-        const float tMax = 1.f-tMin;
-        const float pad = FMath::Clamp(Padding, 0.f, 1.f);
-        const int32 cellN = MapRef.Num();
-
-        FBox2D Bounds(GetBounds());
-        FBox2D BoundsExpand(Bounds.Min*pad, Bounds.Max*(1.f-pad));
-
-        for (int32 it=0; it<PointCount; ++it)
-        {
-            for (int32 i=0; i<MaxPlacementTest; ++i)
-            {
-                int32 cellIdx = Rand.RandHelper(cellN);
-                FJCVCell& cell(MapRef.GetCell(cellIdx));
-
-                if (cell.Value < tMin && BoundsExpand.IsInside(cell.ToVector2D()))
-                {
-                    FJCVValueGenerator::FRadialFill fillParams(Params);
-                    fillParams.Value *= Rand.GetFraction()*tMax;
-                    fillParams.Value += tMin;
-                    FJCVValueGenerator::AddRadialFill(MapRef, cell, fillParams, Rand);
-                    break;
-                }
-            }
-        }
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::AddRadialFill() ABORTED, INVALID ISLAND"));
-    }
 }
 
 // CELL UTILITY FUNCTIONS
@@ -2164,7 +2103,7 @@ void UJCVDiagramAccessor::GenerateSegments(const TArray<FVector2D>& SegmentOrigi
     }
 }
 
-void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, const FJCVRadialFillParams& ValueParams, const FJCVOrogenParams& OrogenParams)
+void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams)
 {
     if (! HasValidMap())
     {
@@ -2183,8 +2122,7 @@ void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, in
 
     // Generates orogeny
     FRandomStream Rand(Seed);
-    FJCVValueGenerator::FRadialFill vp(ValueParams);
-    FJCVPlateGenerator::FOrogenParams orogenParams(vp, OrogenParams.OriginThreshold, OrogenParams.bDivergentAsConvergent);
+    FJCVPlateGenerator::FOrogenParams orogenParams(FillParams, OrogenParams.OriginThreshold, OrogenParams.bDivergentAsConvergent);
     FJCVPlateGenerator::GenerateOrogeny(plate, landscape, orogenParams, Rand);
 
     // Mark features with prepared set
@@ -2193,32 +2131,10 @@ void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, in
     const float threshold = OrogenParams.AreaThreshold;
 
     // Assign Map Feature Type
-    FJCVValueTraits MapCond(threshold, 100.f, OrogenParams.FeatureType);
-    FJCVValueGenerator::MarkFeatures(landscape, MapCond, cellS);
+    FJCVValueTraits ValueTraits(threshold, 100.f, OrogenParams.FeatureType);
+    FJCVValueGenerator::MarkFeatures(landscape, ValueTraits, cellS);
 
     landscape.GroupByFeatures();
-}
-
-void UJCVDiagramAccessor::GenerateDepthMap(UJCVDiagramAccessor* TargetAccessor, FJCVFeatureId FeatureId)
-{
-    if (HasValidMap() && IsValid(TargetAccessor) && TargetAccessor->HasValidMap())
-    {
-        FJCVDiagramMap& SrcMap(*Map);
-        FJCVDiagramMap& DstMap(TargetAccessor->GetMap());
-
-        // Make sure source and target map have the same cell count
-        if (SrcMap.Num() != DstMap.Num())
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDepthMap() ABORTED, SOURCE AND TARGET MAP HAVE DIFFERENT CELL COUNT"));
-            return;
-        }
-
-        FJCVFeatureUtility::GenerateDepthMap(SrcMap, FeatureId.Type, FeatureId.Index, DstMap);
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDepthMap() ABORTED, INVALID ISLAND"));
-    }
 }
 
 void UJCVDiagramAccessor::GenerateDualGeometry(FJCVDualGeometry& Geometry, bool bClearContainer)

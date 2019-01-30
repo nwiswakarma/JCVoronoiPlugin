@@ -489,7 +489,7 @@ void FJCVFeatureUtility::GetRandomCellWithinFeature(
     }
 }
 
-void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, uint8 FeatureType, int32 FeatureIndex, FJCVDiagramMap& DstMap)
+void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, uint8 FeatureType, int32 FeatureIndex)
 {
     // Make sure target feature type have any cells
     if ((FeatureIndex >= 0 && ! SrcMap.HasCells(FeatureType, FeatureIndex)) || ! SrcMap.HasCells(FeatureType))
@@ -567,4 +567,130 @@ void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, uint8 FeatureT
     }
 
     DstMap.GroupByFeatures();
+}
+
+void UJCVFeatureUtility::GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId)
+{
+    if (! IsValid(SrcAccessor))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GenerateDepthMap() ABORTED, INVALID SrcAccessor"));
+        return;
+    }
+
+    if (! IsValid(DstAccessor))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GenerateDepthMap() ABORTED, INVALID DstAccessor"));
+        return;
+    }
+
+    if (! SrcAccessor->HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GenerateDepthMap() ABORTED, INVALID SrcAccessor MAP"));
+        return;
+    }
+
+    if (! DstAccessor->HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GenerateDepthMap() ABORTED, INVALID DstAccessor MAP"));
+        return;
+    }
+
+    FJCVDiagramMap& SrcMap(SrcAccessor->GetMap());
+    FJCVDiagramMap& DstMap(DstAccessor->GetMap());
+
+    // Make sure source and target map have the same cell count
+    if (SrcMap.Num() != DstMap.Num())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GenerateDepthMap() ABORTED, SOURCE AND TARGET MAP HAVE DIFFERENT CELL COUNT"));
+        return;
+    }
+
+    FJCVFeatureUtility::GenerateDepthMap(SrcMap, DstMap, FeatureId.Type, FeatureId.Index);
+}
+
+FJCVCellRef UJCVFeatureUtility::FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex)
+{
+    if (! IsValid(Accessor))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR"));
+        return FJCVCellRef();
+    }
+
+    if (! Accessor->HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR MAP"));
+        return FJCVCellRef();
+    }
+
+    FJCVDiagramMap& Map(Accessor->GetMap());
+
+    if (! Map.HasFeatureType(FeatureType))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID FEATURE TYPE"));
+        return FJCVCellRef();
+    }
+
+    FJCVFeatureGroup& FeatureGroup(*Map.GetFeatureGroup(FeatureType));
+
+    FRandomStream Rand(Seed);
+    const int32 GroupCount = FeatureGroup.GetGroupCount();
+    const int32 Index0 = FMath::Clamp(FromIndex, 0, GroupCount-1);
+    const int32 Index1 = FMath::Clamp(ToIndex  , 0, GroupCount-1);
+
+    TArray<int32> FeatureIndices;
+
+    if (FromIndex <= ToIndex)
+    {
+        for (int32 i=Index0; i<=Index1; ++i)
+        {
+            FeatureIndices.Emplace(i);
+        }
+    }
+    else
+    {
+        for (int32 i=Index0; i>=Index1; --i)
+        {
+            FeatureIndices.Emplace(i);
+        }
+    }
+
+    const float RadiusSq = Radius * Radius;
+    FJCVCellRef CellResult;
+
+    for (int32 FeatureIndex : FeatureIndices)
+    {
+        FJCVCellGroup CellGroup(FeatureGroup.CellGroups[FeatureIndex]);
+        int32 CellCount = CellGroup.Num();
+
+        // Shuffle cell group copy
+		for (int32 i=0; i<CellCount; ++i)
+		{
+			int32 SwapIndex = Rand.RandHelper(CellCount);
+
+			if (i != SwapIndex)
+			{
+                CellGroup.Swap(i, SwapIndex);
+			}
+		}
+
+        // Find cell outside of point radius
+        for (const FJCVCell* Cell : CellGroup)
+        {
+            FVector2D CellOrigin(Cell->ToVector2DUnsafe());
+            float CellDistSq = (Origin-CellOrigin).SizeSquared();
+
+            if (CellDistSq > RadiusSq)
+            {
+                CellResult = FJCVCellRef(Cell);
+                break;
+            }
+        }
+
+        if (CellResult.HasValidCell())
+        {
+            break;
+        }
+    }
+
+    return CellResult;
 }

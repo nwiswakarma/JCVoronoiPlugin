@@ -27,10 +27,14 @@
 
 #pragma once
 
+#include "CoreMinimal.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 #include "JCVTypes.h"
-#include "Queue.h"
-#include "Set.h"
-#include "Math/NumericLimits.h"
+#include "JCVParameters.h"
+#include "JCVDiagramAccessor.h"
+#include "JCVFeatureUtility.generated.h"
+
+class UJCVDiagramAccessor;
 
 class FJCVFeatureUtility
 {
@@ -79,5 +83,19 @@ public:
         int32 MinCellDistance = 0
         );
 
-    static void GenerateDepthMap(FJCVDiagramMap& SrcMap, uint8 FeatureType, int32 FeatureIndex, FJCVDiagramMap& DstMap);
+    static void GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, uint8 FeatureType, int32 FeatureIndex);
+};
+
+UCLASS()
+class UJCVFeatureUtility : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    static void GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    static FJCVCellRef FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex);
 };

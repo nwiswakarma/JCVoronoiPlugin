@@ -37,26 +37,6 @@
 #include "JCVDiagramAccessor.generated.h"
 
 USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVFeatureId
-{
-	GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    uint8 Type;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 Index;
-
-    FJCVFeatureId() = default;
-
-    FJCVFeatureId(uint8 InType, int32 InIndex)
-        : Type(InType)
-        , Index(InIndex)
-    {
-    }
-};
-
-USTRUCT(BlueprintType)
 struct JCVORONOIPLUGIN_API FJCVCellTypeGroupRef
 {
 	GENERATED_BODY()
@@ -78,6 +58,11 @@ struct JCVORONOIPLUGIN_API FJCVCellRef
 
     FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
     {
+    }
+
+    bool HasValidCell() const
+    {
+        return Data != nullptr;
     }
 };
 
@@ -311,24 +296,27 @@ public:
 // MARK FEATURE FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkDefaultFeatures(uint8 FeatureType);
+    void MarkUndefinedFeatures(uint8 FeatureType);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkFeaturesByType(FJCVCellTraitsParams TypeTraits);
+    void MarkFeaturesByType(FJCVCellTraits FeatureTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkFeaturesByValue(FJCVValueTraitsParams ValueTraits);
+    void MarkFeaturesByValue(FJCVValueTraits ValueTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous = true);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond);
+    void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraitsParams FilterCond);
+    void MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits);
 
 // FEATURE UTILITY FUNCTIONS
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    bool HasFeature(FJCVFeatureId FeatureId) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     int32 GetFeatureCount() const;
@@ -337,10 +325,13 @@ public:
     int32 GetFeatureGroupCount(uint8 FeatureType) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
+    int32 GetFeatureCellCount(FJCVFeatureId FeatureId) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
     void ResetFeatures(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ApplyValueByFeatures(FJCVCellTraitsParams TypeTraits, float Value);
+    void ApplyValueByFeatures(FJCVCellTraits FeatureTraits, float Value);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1, int32 FeatureIndex, bool bGroupFeatures);
@@ -483,17 +474,6 @@ public:
     UFUNCTION(BlueprintCallable, Category="JCV")
     float GetFurthestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId) const;
 
-// CELL VALUE FUNCTIONS
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillAt(const FVector2D& Position, const FJCVRadialFillParams& Params, int32 Seed);
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillByIndex(int32 CellIndex, const FJCVRadialFillParams& Params, int32 Seed);
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void AddRadialFillNum(int32 PointCount, const FJCVRadialFillParams& Params, int32 Seed, float Padding=0.f, float ValueThreshold=.25f, int32 MaxPlacementTest=50);
-
 // CELL UTILITY FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -505,10 +485,7 @@ public:
     void GenerateSegments(const TArray<FVector2D>& SegmentOrigins, int32 SegmentMergeCount, int32 Seed);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, const FJCVRadialFillParams& ValueParams, const FJCVOrogenParams& OrogenParams);
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void GenerateDepthMap(UJCVDiagramAccessor* TargetAccessor, FJCVFeatureId FeatureId);
+    void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GenerateDualGeometry(UPARAM(ref) FJCVDualGeometry& Geometry, bool bClearContainer = true);

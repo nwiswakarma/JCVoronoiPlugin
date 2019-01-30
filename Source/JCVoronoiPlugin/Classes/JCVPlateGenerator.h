@@ -28,31 +28,30 @@
 #pragma once
 
 #include "JCVTypes.h"
+#include "JCVParameters.h"
 #include "JCVValueGenerator.h"
 
 class FJCVPlateGenerator
 {
 
-    typedef FJCVValueGenerator::FRadialFill FRadialFill;
-
 public:
 
     struct FOrogenParams
     {
-        FRadialFill ValueParams;
+        FJCVRadialFill ValueParams;
         float OriginValueThreshold = .1f;
         bool bDivergentAsConvergent = false;
 
         FORCEINLINE FOrogenParams() = default;
 
-        FORCEINLINE FOrogenParams(FRadialFill v, float o, bool d)
+        FORCEINLINE FOrogenParams(FJCVRadialFill v, float o, bool d)
             : ValueParams(v)
             , OriginValueThreshold(o)
             , bDivergentAsConvergent(d)
         {
         }
 
-        FORCEINLINE void Set(FRadialFill v, float o, bool d)
+        FORCEINLINE void Set(FJCVRadialFill v, float o, bool d)
         {
             ValueParams = v;
             OriginValueThreshold = o;
@@ -119,7 +118,7 @@ public:
         }
         incidentEdges.Shrink();
 
-        FRadialFill nodeParams( OrogenParams.ValueParams );
+        FJCVRadialFill nodeParams(OrogenParams.ValueParams);
         const float originThreshold = OrogenParams.OriginValueThreshold;
         const bool bDivergentAsConvergent = OrogenParams.bDivergentAsConvergent;
         // Generates orogen values on Landscape island parameter
@@ -165,7 +164,7 @@ public:
             if (plateSpr < originThreshold)
                 continue;
             nodeParams.Value = plateSpr;
-            FJCVValueGenerator::AddRadialFill(Landscape, *cell, nodeParams, Rand);
+            FJCVValueGenerator::AddRadialFill(Landscape, Rand, *cell, nodeParams);
         }
     }
 
