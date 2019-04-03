@@ -681,7 +681,7 @@ void FJCVDiagramMap::GetJunctionCells(const FJCVCell& c, TArray<FJCVCellJunction
 
     while (g1)
     {
-        const FJCVCell* n1 = GetCell(g1->neighbor);
+        n1 = GetCell(g1->neighbor);
 
         if (n1 && ! n1->IsType(t))
         {
@@ -715,8 +715,8 @@ void FJCVDiagramMap::GetJunctionCells(const FJCVCell& c, TArray<FJCVCellJunction
     {
         check(c.GetEdge() != nullptr);
 
-        const FJCVEdge* g1 = c.GetEdge();
-        const FJCVCell* n1 = GetCell(g1->neighbor);
+        g1 = c.GetEdge();
+        n1 = GetCell(g1->neighbor);
 
         if (n1 && ! n1->IsType(t) && ! n1->IsType(n0->FeatureType))
         {

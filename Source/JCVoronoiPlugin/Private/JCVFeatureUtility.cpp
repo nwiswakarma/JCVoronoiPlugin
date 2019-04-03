@@ -323,12 +323,12 @@ void FJCVFeatureUtility::PointFillSubdivideFeatures(
 
         if (plateCell)
         {
-            FJCVFeatureGroup* fg = Map.GetFeatureGroup(plateCell->FeatureType);
+            FJCVFeatureGroup* plateFeatureGroup = Map.GetFeatureGroup(plateCell->FeatureType);
 
-            if (fg)
+            if (plateFeatureGroup)
             {
-                plateQ.Enqueue(fg->FeatureType);
-                VisitedFeatureSet.Emplace(fg->FeatureType);
+                plateQ.Enqueue(plateFeatureGroup->FeatureType);
+                VisitedFeatureSet.Emplace(plateFeatureGroup->FeatureType);
             }
         }
     }

@@ -1929,15 +1929,15 @@ FJCVCellRefGroup UJCVDiagramAccessor::MergeCellGroups(const TArray<FJCVCellRefGr
     TSet<const FJCVCell*> CellSet;
     int32 CellCount = 0;
 
-    for (const FJCVCellRefGroup& CellGroup : CellGroups)
+    for (const FJCVCellRefGroup& cg : CellGroups)
     {
-        CellCount += CellGroup.Data.Num();
+        CellCount += cg.Data.Num();
     }
 
     CellSet.Reserve(CellCount);
 
-    for (const FJCVCellRefGroup& CellGroup : CellGroups)
-    for (const FJCVCellRef& Cell : CellGroup.Data)
+    for (const FJCVCellRefGroup& cg : CellGroups)
+    for (const FJCVCellRef& Cell : cg.Data)
     {
         if (Cell.Data)
         {
