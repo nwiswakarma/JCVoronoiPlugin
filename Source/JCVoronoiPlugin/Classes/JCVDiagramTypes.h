@@ -41,6 +41,8 @@ typedef jcv_site        FJCVSite;
 typedef jcv_graphedge   FJCVEdge;
 typedef jcv_point       FJCVPoint;
 
+// Math Utility
+
 class FJCVMathUtil
 {
 public:

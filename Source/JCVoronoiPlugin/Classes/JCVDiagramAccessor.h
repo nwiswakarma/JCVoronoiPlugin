@@ -27,197 +27,33 @@
 
 #pragma once
 
-#include "CoreUObject.h"
-#include "CoreTypes.h"
-#include "Containers/Set.h"
+#include "CoreMinimal.h"
 
 #include "JCVoronoiPlugin.h"
 #include "JCVParameters.h"
 #include "JCVDiagramMap.h"
+#include "JCVDiagramTypes.h"
 #include "JCVDiagramAccessor.generated.h"
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellTypeGroupRef
-{
-	GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<uint8> Data;
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellRef
-{
-	GENERATED_BODY()
-
-    const FJCVCell* Data;
-
-    FJCVCellRef() : Data(nullptr)
-    {
-    }
-
-    FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
-    {
-    }
-
-    bool HasValidCell() const
-    {
-        return Data != nullptr;
-    }
-};
-
-class UJCVDiagramObject;
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
-{
-	GENERATED_BODY()
-
-    const FJCVCell* Cell;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    bool bIsValid;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 Index;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FVector2D Point;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float Value;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    bool bIsBorder;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    uint8 FeatureType;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 FeatureIndex;
-
-    FJCVCellDetailsRef() : bIsValid(false)
-    {
-    }
-
-    explicit FJCVCellDetailsRef(const FJCVCellRef& InCellRef)
-    {
-        Set(InCellRef.Data);
-    }
-
-    explicit FJCVCellDetailsRef(const FJCVCell* InCell)
-    {
-        Set(InCell);
-    }
-
-    void Set(const FJCVCell* InCell)
-    {
-        Cell = InCell;
-        bIsValid = Cell != nullptr;
-
-        if (bIsValid)
-        {
-            Index        = Cell->GetIndex();
-            Point        = Cell->ToVector2D();
-            Value        = Cell->Value;
-            bIsBorder    = Cell->bIsBorder;
-            FeatureType  = Cell->FeatureType;
-            FeatureIndex = Cell->FeatureIndex;
-        }
-    }
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellRefGroup
-{
-	GENERATED_BODY()
-
-    UPROPERTY(BlueprintReadWrite)
-    TArray<FJCVCellRef> Data;
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellJunctionRef
-{
-	GENERATED_BODY()
-
-    UPROPERTY(BlueprintReadWrite)
-    FVector2D Point;
-
-    UPROPERTY(BlueprintReadWrite)
-    TArray<FJCVCellRef> Cells;
-
-    FJCVCellJunctionRef() = default;
-
-    FJCVCellJunctionRef(const FVector2D& InPoint, const FJCVConstCellGroup& InCells)
-        : Point(InPoint)
-        , Cells(InCells)
-    {
-    }
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVPointGroup
-{
-	GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FVector2D> Points;
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVDualGeometry
-{
-	GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FVector2D> Points;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<int32> PolyIndices;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<int32> CellIndices;
-
-    FORCEINLINE bool HasGeometry() const
-    {
-        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
-    }
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVPolyGeometry
-{
-	GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<FVector> Points;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<int32> PolyIndices;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TArray<int32> CellIndices;
-
-    FORCEINLINE bool HasGeometry() const
-    {
-        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
-    }
-};
 
 UCLASS(BlueprintType)
 class JCVORONOIPLUGIN_API UJCVDiagramAccessor : public UObject
 {
 	GENERATED_BODY()
 
+    friend class UJCVDiagramObject;
+
     FJCVDiagramMap* Map;
+    int32 ContextId;
+    int32 MapId;
 
-public:
-
-    void SetMap(FJCVDiagramMap& AccessedMap)
+    void SetMap(FJCVDiagramMap& AccessedMap, int32 InContextId, int32 InMapId)
     {
         Map = &AccessedMap;
+        ContextId = InContextId;
+        MapId = InMapId;
     }
+
+public:
 
     FORCEINLINE bool HasValidMap() const
     {
@@ -240,6 +76,16 @@ public:
         return *Map;
     }
 
+    FORCEINLINE int32 GetContextId() const
+    {
+        return ContextId;
+    }
+
+    FORCEINLINE int32 GetMapId() const
+    {
+        return MapId;
+    }
+
     UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Has Valid Map")
     bool K2_HasValidMap() const
     {
@@ -250,6 +96,25 @@ public:
     FBox2D K2_GetBounds() const
     {
         return HasValidMap() ? GetBounds() : FBox2D();
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Get Context Id")
+    int32 K2_GetContextId() const
+    {
+        return GetContextId();
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Get Map Id")
+    int32 K2_GetMapId() const
+    {
+        return GetMapId();
+    }
+
+    UFUNCTION(BlueprintCallable, Category="JCV", DisplayName="Get Context Map Id")
+    void K2_GetContextMapId(int32& OutContextId, int32& OutMapId)
+    {
+        OutContextId = ContextId;
+        OutMapId = MapId;
     }
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -296,12 +161,12 @@ public:
 // MARK FEATURE FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkUndefinedFeatures(uint8 FeatureType);
+    void MarkUnmarkedFeatures(uint8 FeatureType);
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Mark Unmarked Features By Type"))
     void MarkFeaturesByType(FJCVCellTraits FeatureTraits);
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Mark Unmarked Features By Type"))
     void MarkFeaturesByValue(FJCVValueTraits ValueTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -323,6 +188,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     int32 GetFeatureGroupCount(uint8 FeatureType) const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    int32 GetLastFeatureGroupIndex(uint8 FeatureType) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     int32 GetFeatureCellCount(FJCVFeatureId FeatureId) const;
@@ -366,13 +234,10 @@ public:
     void MapNormalizedDistanceFromCell(FJCVCellRef OriginCellRef, FJCVFeatureId FeatureId, bool bAgainstAnyType = false);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVPointGroup GetFeaturePoints(FJCVFeatureId FeatureId) const;
+    FJCVPointGroup GetFeaturePoints(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup GetFeatureCells(FJCVFeatureId FeatureId) const;
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders = false, int32 MinCellDistance = 0) const;
+    FJCVCellRefGroup GetFeatureCells(FJCVFeatureId FeatureId);
 
 // CELL QUERY FUNCTIONS
 
@@ -380,49 +245,52 @@ public:
     int32 GetCellCount() const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellDetailsRef GetCellDetails(const FJCVCellRef& CellRef) const;
+    FJCVCellDetailsRef GetCellDetails(const FJCVCellRef& CellRef);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellDetailsRef> GetCellGroupDetails(const TArray<FJCVCellRef> CellRefs) const;
+    TArray<FJCVCellDetailsRef> GetCellGroupDetails(const TArray<FJCVCellRef> CellRefs);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<uint8> GetNeighbourTypes(const FJCVCellRef& CellRef) const;
+    TArray<uint8> GetNeighbourTypes(const FJCVCellRef& CellRef);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellTypeGroupRef> GetGroupNeighbourTypes(const FJCVCellRefGroup& CellGroup) const;
+    TArray<FJCVCellTypeGroupRef> GetGroupNeighbourTypes(const FJCVCellRefGroup& CellGroup);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     TArray<int32> GetCellRange(const FVector2D& StartPosition, const FVector2D& EndPosition);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRef GetRandomCell(FJCVFeatureId FeatureId, int32 Seed);
+    int32 GetClosestCellAt(const FVector2D& Pos);
+
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="FeatureId"))
+    FJCVCellRef GetRandomCell(int32 Seed, const FJCVFeatureId& FeatureId);
+
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="FeatureId"))
+    void GetRandomCells(TArray<FJCVCellRef>& Cells, int32 Seed, const FJCVFeatureId& FeatureId, int32 Count);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> GetRandomCells(int32 Count, FJCVFeatureId FeatureId, int32 Seed, int32 IterationLimit = 50);
+    TArray<int32> GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders = false, int32 MinCellDistance = 0);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    int32 GetClosestCellAt(const FVector2D& Pos) const;
+    TArray<int32> FilterPoints(const TArray<FVector2D>& Points, FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> FilterPoints(const TArray<FVector2D>& Points, FJCVFeatureId FeatureId) const;
+    FJCVCellRef FindCell(const FVector2D& Position);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRef FindCell(const FVector2D& Position) const;
+    FJCVCellRefGroup FindCells(const TArray<FVector2D>& Positions);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup FindCells(const TArray<FVector2D>& Positions) const;
+    TArray<FJCVCellRefGroup> FindCellsWithinRects(const TArray<FBox2D>& Rects);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellRefGroup> FindCellsWithinRects(const TArray<FBox2D>& Rects) const;
+    FJCVCellRefGroup FindBorderCells(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup FindBorderCells(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false) const;
+    TArray<FJCVCellJunctionRef> FindJunctionCells(uint8 FeatureType);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellJunctionRef> FindJunctionCells(uint8 FeatureType) const;
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVPointGroup> FindEdgePoints(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false) const;
+    TArray<FJCVPointGroup> FindEdgePoints(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders = false, bool bAgainstAnyType = false);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     bool FindEdgePointsWithEndPoints(
@@ -432,7 +300,7 @@ public:
         uint8 FeatureType1,
         bool bAllowBorders = false,
         bool bAgainstAnyType = false
-        ) const;
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     TArray<FJCVPointGroup> GenerateOrderedFeatureBorderPoints(
@@ -440,7 +308,7 @@ public:
         TArray<uint8> AdditionalFeatures,
         bool bExpandEdges = false,
         bool bAllowBorders = false
-        ) const;
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     FJCVCellRefGroup GetCellByOriginRadius(
@@ -448,13 +316,13 @@ public:
         float Radius,
         FJCVFeatureId FeatureId,
         bool bAgainstAnyType = false
-        ) const;
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup ExpandCellQuery(const FJCVCellRef& CellRef, int32 ExpandCount, FJCVFeatureId FeatureId, bool bAgainstAnyType) const;
+    FJCVCellRefGroup ExpandCellQuery(const FJCVCellRef& CellRef, int32 ExpandCount, FJCVFeatureId FeatureId, bool bAgainstAnyType);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup ExpandCellGroupQuery(const FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId, int32 ExpandCount, bool bAgainstAnyType) const;
+    FJCVCellRefGroup ExpandCellGroupQuery(const FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId, int32 ExpandCount, bool bAgainstAnyType);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void FilterCellsByType(UPARAM(ref) FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId);
@@ -463,21 +331,21 @@ public:
     void ExcludeCellsByType(UPARAM(ref) FJCVCellRefGroup& CellGroup, FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellRefGroup MergeCellGroups(const TArray<FJCVCellRefGroup>& CellGroups) const;
+    FJCVCellRefGroup MergeCellGroups(const TArray<FJCVCellRefGroup>& CellGroups);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellJunctionRef> FilterUniqueJunctions(const TArray<FJCVCellJunctionRef>& Junctions) const;
+    TArray<FJCVCellJunctionRef> FilterUniqueJunctions(const TArray<FJCVCellJunctionRef>& Junctions);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    float GetClosestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId) const;
+    float GetClosestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    float GetFurthestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId) const;
+    float GetFurthestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId);
 
 // CELL UTILITY FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<int32> GenerateCellGridIndices(const FJCVCellRef& Cell, const FIntPoint& GridDimension, const float BoundsExpand = 0.f) const;
+    TArray<int32> GenerateCellGridIndices(const FJCVCellRef& Cell, const FIntPoint& GridDimension, const float BoundsExpand = 0.f);
 
 // MAP UTILITY FUNCTIONS
 
@@ -489,6 +357,9 @@ public:
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GenerateDualGeometry(UPARAM(ref) FJCVDualGeometry& Geometry, bool bClearContainer = true);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GeneratePolyGeometry(UPARAM(ref) FJCVPolyGeometry& Geometry, bool bFilterDuplicates = true, bool bUseCellAverageValue = false, bool bClearContainer = true);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GenerateDualGeometryByFeature(UPARAM(ref) FJCVDualGeometry& Geometry, FJCVFeatureId FeatureId, bool bClearContainer = true);
@@ -508,7 +379,7 @@ private:
     void GetPointDualGeometry(
         TSet<FIntPoint>& VisitedPointSet,
         TMap<int32, int32>& CellIndexMap,
-        TArray<FVector2D>& Points,
+        TArray<FVector>& Points,
         TArray<int32>& PolyIndices,
         TArray<int32>& CellIndices,
         const FJCVPoint& Point,

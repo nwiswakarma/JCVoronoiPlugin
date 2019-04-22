@@ -28,8 +28,12 @@
 #pragma once
 
 #include "CoreUObject.h"
-#include "JCVDiagramMap.h"
 #include "JCVParameters.generated.h"
+
+class UJCVDiagramObject;
+struct FJCVCell;
+
+// Feature & Trait Parameters
 
 USTRUCT(BlueprintType)
 struct JCVORONOIPLUGIN_API FJCVFeatureId
@@ -99,15 +103,8 @@ struct JCVORONOIPLUGIN_API FJCVCellTraits
     {
     }
 
-    FORCEINLINE virtual bool HasValidFeature(const FJCVCell& c) const
-    {
-        return c.FeatureType == TestType;
-    }
-
-    FORCEINLINE virtual bool HasUndefinedType(const FJCVCell& c) const
-    {
-        return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
-    }
+    virtual bool HasValidFeature(const FJCVCell& c) const;
+    virtual bool HasUndefinedType(const FJCVCell& c) const;
 };
 
 USTRUCT(BlueprintType, Blueprintable)
@@ -130,10 +127,7 @@ struct JCVORONOIPLUGIN_API FJCVValueTraits : public FJCVCellTraits
     {
     }
 
-    FORCEINLINE virtual bool HasValidFeature(const FJCVCell& c) const override
-    {
-        return c.Value > ValueLo && c.Value < ValueHi;
-    }
+    virtual bool HasValidFeature(const FJCVCell& c) const override;
 };
 
 USTRUCT(BlueprintType, Blueprintable)
@@ -152,4 +146,169 @@ struct JCVORONOIPLUGIN_API FJCVOrogenParams
 
 	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     bool bDivergentAsConvergent = false;
+};
+
+// Cell Types
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellTypeGroupRef
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<uint8> Data;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellRef
+{
+	GENERATED_BODY()
+
+    const FJCVCell* Data;
+
+    FJCVCellRef() : Data(nullptr)
+    {
+    }
+
+    FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
+    {
+    }
+
+    FJCVCellRef(const FJCVCell& Cell) : Data(&Cell)
+    {
+    }
+
+    bool HasValidCell() const
+    {
+        return Data != nullptr;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
+{
+	GENERATED_BODY()
+
+    const FJCVCell* Cell;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsValid;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 Index;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    FVector2D Point;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float Value;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bIsBorder;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    uint8 FeatureType;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 FeatureIndex;
+
+    FJCVCellDetailsRef() : bIsValid(false)
+    {
+    }
+
+    explicit FJCVCellDetailsRef(const FJCVCellRef& InCellRef)
+    {
+        Set(InCellRef.Data);
+    }
+
+    explicit FJCVCellDetailsRef(const FJCVCell* InCell)
+    {
+        Set(InCell);
+    }
+
+    void Set(const FJCVCell* InCell);
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellRefGroup
+{
+	GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite)
+    TArray<FJCVCellRef> Data;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellJunctionRef
+{
+	GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadWrite)
+    FVector2D Point;
+
+    UPROPERTY(BlueprintReadWrite)
+    TArray<FJCVCellRef> Cells;
+
+    FJCVCellJunctionRef() = default;
+
+    FJCVCellJunctionRef(
+        const FVector2D& InPoint,
+        const TArray<const FJCVCell*>& InCells
+        )
+        : Point(InPoint)
+        , Cells(InCells)
+    {
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVPointGroup
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector2D> Points;
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVDualGeometry
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector> Points;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> PolyIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> CellIndices;
+
+    FORCEINLINE bool HasGeometry() const
+    {
+        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVPolyGeometry
+{
+	GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<FVector> Points;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> PolyIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> CellIndices;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    TArray<int32> CellPolyCounts;
+
+    FORCEINLINE bool HasGeometry() const
+    {
+        return Points.Num() >= 3 && PolyIndices.Num() >= 3;
+    }
 };

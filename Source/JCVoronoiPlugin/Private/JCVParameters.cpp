@@ -23,29 +23,38 @@
 // THE SOFTWARE.
 //
 ////////////////////////////////////////////////////////////////////////////////
-//
+// 
 
-#include "JCVoronoiPlugin.h"
-#include "JCVDiagramMapManager.h"
+#include "JCVParameters.h"
+#include "JCVDiagramMap.h"
 
-#define LOCTEXT_NAMESPACE "JCVoronoiPlugin"
-
-class FJCVoronoiPlugin : public IJCVoronoiPlugin
+bool FJCVCellTraits::HasValidFeature(const FJCVCell& c) const
 {
-public:
-	virtual void StartupModule() override;
-	virtual void ShutdownModule() override;
-};
-
-void FJCVoronoiPlugin::StartupModule()
-{
+    return c.FeatureType == TestType;
 }
 
-void FJCVoronoiPlugin::ShutdownModule()
+bool FJCVCellTraits::HasUndefinedType(const FJCVCell& c) const
 {
+    return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
 }
 
-IMPLEMENT_MODULE(FJCVoronoiPlugin, JCVoronoiPlugin)
-DEFINE_LOG_CATEGORY(LogJCV);
+bool FJCVValueTraits::HasValidFeature(const FJCVCell& c) const
+{
+    return c.Value > ValueLo && c.Value < ValueHi;
+}
 
-#undef LOCTEXT_NAMESPACE
+void FJCVCellDetailsRef::Set(const FJCVCell* InCell)
+{
+    Cell = InCell;
+    bIsValid = Cell != nullptr;
+
+    if (bIsValid)
+    {
+        Index        = Cell->GetIndex();
+        Point        = Cell->ToVector2D();
+        Value        = Cell->Value;
+        bIsBorder    = Cell->bIsBorder;
+        FeatureType  = Cell->FeatureType;
+        FeatureIndex = Cell->FeatureIndex;
+    }
+}

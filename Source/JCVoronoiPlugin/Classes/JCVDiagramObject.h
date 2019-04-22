@@ -67,14 +67,14 @@ class JCVORONOIPLUGIN_API UJCVDiagramObject : public UObject
 	UPROPERTY(Transient)
     TArray<UJCVDiagramAccessor*> Accessors;
 
-    FORCEINLINE bool HasContext_Direct(int32 ContextID) const
+    FORCEINLINE bool HasContext(int32 ContextID) const
     {
         return ContextMap.Contains(ContextID) && ContextMap.FindChecked(ContextID).IsValid();
     }
 
-    FORCEINLINE bool HasMap_Direct(int32 ContextID, int32 MapID) const
+    FORCEINLINE bool HasMap(int32 ContextID, int32 MapID) const
     {
-        return HasContext_Direct(ContextID) ? GetContext(ContextID)->HasMap(MapID) : false;
+        return HasContext(ContextID) ? GetContext(ContextID)->HasMap(MapID) : false;
     }
 
     FORCEINLINE FPSJCVDiagramMapContext GetContext(int32 ContextID)
@@ -97,150 +97,33 @@ class JCVORONOIPLUGIN_API UJCVDiagramObject : public UObject
         return GetContext(ContextID)->GetMap(MapID);
     }
 
-    int32 CreateAccessor(FJCVDiagramMap& Map)
-    {
-        UJCVDiagramAccessor* accessor = NewObject<UJCVDiagramAccessor>(this);
-        accessor->SetMap(Map);
-
-        int32 aid = -1;
-
-        for (int32 i=0; i<Accessors.Num(); ++i)
-        {
-            if (! Accessors[i])
-            {
-                aid = i;
-                break;
-            }
-        }
-
-        if (aid < 0)
-        {
-            aid = Accessors.Emplace(accessor);
-        }
-        else
-        {
-            Accessors[aid] = accessor;
-        }
-
-        return aid;
-    }
+    int32 CreateAccessor(FJCVDiagramMap& Map, int32 ContextId, int32 MapId);
 
 public:
 
-    virtual void BeginDestroy() override
-    {
-        // Clear registered diagram references
-        ResetDiagramObject();
+    virtual void BeginDestroy() override;
 
-        Super::BeginDestroy();
-    }
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Has Context"))
+    bool K2_HasContext(int32 ContextID) const;
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    bool HasContext(int32 ContextID) const
-    {
-        return HasContext_Direct(ContextID);
-    }
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Has Map"))
+    bool K2_HasMap(int32 ContextID, int32 MapID) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    bool HasMap(int32 ContextID, int32 MapID)
-    {
-        return HasMap_Direct(ContextID, MapID);
-    }
+    void ResetDiagramObject();
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void ResetDiagramObject()
-    {
-        ContextMap.Empty();
-        Accessors.Empty();
-    }
+    void CreateContext(int32 ContextID, FVector2D Size, TArray<FVector2D> Points);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateContext(int32 ContextID, FVector2D Size, TArray<FVector2D> Points)
-    {
-        if (Points.Num() <= 0)
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContext() ABORTED, UNABLE TO GENERATE ISLAND WITH EMPTY POINTS"));
-            return;
-        }
-
-        if (! HasContext_Direct(ContextID))
-        {
-            FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(Size, Points));
-            ContextMap.Emplace(ContextID, Context);
-        }
-    }
+    void CreateMap(int32 ContextID, int32 MapID);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateMap(int32 ContextID, int32 MapID)
-    {
-        if (HasContext_Direct(ContextID))
-        {
-            CreateMapWithDefaultType(ContextID, MapID, EJCVCellFeature::UNDEFINED, 0);
-        }
-        else
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateMap() ABORTED, INVALID ISLAND CONTEXT"));
-            return;
-        }
-    }
+    void CreateMapWithDefaultType(int32 ContextID, int32 MapID, uint8 FeatureType, int32 FeatureIndex);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateMapWithDefaultType(int32 ContextID, int32 MapID, uint8 FeatureType, int32 FeatureIndex)
-    {
-        if (! HasContext_Direct(ContextID))
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateMapWithDefaultType() ABORTED, INVALID ISLAND CONTEXT"));
-            return;
-        }
-
-        FPSJCVDiagramMapContext Context = GetContext(ContextID);
-        FJCVDiagramMap& Map(Context->CreateMap(MapID, FeatureType, FeatureIndex, true));
-
-        FContextIdentifier& cid(ContextMap.FindChecked(ContextID));
-        int32 aid = CreateAccessor(Map);
-
-        cid.AccessorMap.Emplace(MapID, aid);
-    }
+    void CopyMap(int32 ContextID, int32 SrcMapID, int32 DstMapID);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CopyMap(int32 ContextID, int32 SrcMapID, int32 DstMapID)
-    {
-        if (! HasContext_Direct(ContextID))
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CopyMap() ABORTED, INVALID ISLAND CONTEXT"));
-            return;
-        }
-
-        if (! HasMap_Direct(ContextID, SrcMapID))
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CopyMap() ABORTED, INVALID SOURCE ISLAND"));
-            return;
-        }
-
-        if (SrcMapID == DstMapID)
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CopyMap() ABORTED, SOURCE AND DESTINATION ISLAND HAVE THE SAME ID"));
-            return;
-        }
-
-        FPSJCVDiagramMapContext Context = GetContext(ContextID);
-        FJCVDiagramMap& Map(Context->CopyMap(SrcMapID, DstMapID));
-
-        FContextIdentifier& cid(ContextMap.FindChecked(ContextID));
-        int32 aid = CreateAccessor(Map);
-
-        cid.AccessorMap.Emplace(DstMapID, aid);
-    }
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    UJCVDiagramAccessor* GetAccessor(int32 ContextID, int32 MapID)
-    {
-        if (HasMap_Direct(ContextID, MapID))
-        {
-            FContextIdentifier& cid( ContextMap.FindChecked(ContextID) );
-            check(cid.AccessorMap.Contains(MapID));
-            return Accessors[cid.AccessorMap.FindChecked(MapID)];
-        }
-        return nullptr;
-    }
+    UJCVDiagramAccessor* GetAccessor(int32 ContextID, int32 MapID);
 };
