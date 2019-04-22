@@ -521,7 +521,7 @@ public:
         const FJCVSite* InSite,
         uint8 FeatureType,
         int32 FeatureIndex,
-        TSet<const FJCVSite*> FilterSet,
+        TSet<const FJCVSite*>& FilterSet,
         bool bAddToFilterIfMarked = false
         );
 

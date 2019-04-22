@@ -40,9 +40,11 @@ public class JCVoronoiPlugin: ModuleRules
                 "Core",
                 "CoreUObject",
                 "Engine"
-            });
+            } );
 
-        PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] {
+                "GeometryUtilityLibrary"
+            } );
 
         string ThirdPartyPath = Path.Combine(ModuleDirectory, "../../ThirdParty");
 

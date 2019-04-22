@@ -30,6 +30,8 @@
 #include "JCVValueGenerator.h"
 #include "JCVPlateGenerator.h"
 
+#include "Poly/GULPolyUtilityLibrary.h"
+
 // MARK FEATURE FUNCTIONS
 
 void UJCVDiagramAccessor::MarkUnmarkedFeatures(uint8 FeatureType)
@@ -41,7 +43,7 @@ void UJCVDiagramAccessor::MarkUnmarkedFeatures(uint8 FeatureType)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkUnmarkedFeatures() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkUnmarkedFeatures() ABORTED, INVALID MAP"));
     }
 }
 
@@ -53,7 +55,7 @@ void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraits FeatureTraits)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID MAP"));
     }
 }
 
@@ -65,15 +67,15 @@ void UJCVDiagramAccessor::MarkFeaturesByValue(FJCVValueTraits ValueTraits)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID MAP"));
     }
 }
 
-void UJCVDiagramAccessor::MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous)
+void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous, bool bExtractVisitedCells)
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -82,52 +84,92 @@ void UJCVDiagramAccessor::MarkPositions(const TArray<FVector2D>& Positions, FJCV
         return;
     }
 
+    TArray<const FJCVCell*> VisitedCells;
+    TArray<const FJCVCell*>* VisitedCellsPtr = bExtractVisitedCells ? &VisitedCells : nullptr;
+
     if (bContiguous)
     {
-        MarkPositionsContiguous(*Map, Positions, FeatureId);
+        MarkPositionsContiguous(*Map, Positions, FeatureId, VisitedCellsPtr);
     }
     else
     {
-        MarkPositions(*Map, Positions, FeatureId);
+        MarkPositions(*Map, Positions, FeatureId, VisitedCellsPtr);
+    }
+
+    if (bExtractVisitedCells)
+    {
+        VisitedCellRefs.Reserve(VisitedCells.Num());
+
+        for (const FJCVCell* VisitedCell : VisitedCells)
+        {
+            VisitedCellRefs.Emplace(VisitedCell);
+        }
     }
 }
 
-void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId)
+void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<const FJCVCell*>* VisitedCells)
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID MAP"));
         return;
     }
 
-    const int32 posN = Positions.Num();
-    const int32 siteN = MapRef.Num();
-    const int32 resvN = posN<siteN ? posN : siteN;
+    const int32 PointCount = Positions.Num();
+    const int32 SiteCount = MapRef.Num();
+    const int32 ReserveCount = FMath::Min(PointCount, SiteCount);
 
-    TArray<const FJCVSite*> siteQ;
-    TSet<const FJCVSite*> siteS;
-    siteS.Reserve(resvN);
+    TSet<const FJCVSite*> VisitedSiteSet;
+    VisitedSiteSet.Reserve(ReserveCount);
 
-    const FJCVSite* s = nullptr;
+    if (VisitedCells)
+    {
+        VisitedCells->Reserve(ReserveCount);
+    }
+
+    TArray<const FJCVSite*> SegmentSites;
+    const FJCVSite* SiteIt = nullptr;
+
     for (const FVector2D& v : Positions)
     {
-        if (s)
+        if (SiteIt)
         {
-            siteQ.Reset();
-            MapRef->FindAllTo(v, *s, siteQ);
-            for (const FJCVSite* s1 : siteQ)
-                MapRef.MarkFiltered(s1, FeatureId.Type, FeatureId.Index, siteS, true);
-            s = siteQ.Last();
+            SegmentSites.Reset();
+            MapRef->FindAllTo(v, *SiteIt, SegmentSites);
+
+            if (VisitedCells)
+            {
+                VisitedCells->Reserve(VisitedCells->Num()+SegmentSites.Num());
+            }
+
+            for (const FJCVSite* SegmentSite : SegmentSites)
+            {
+                check(SegmentSite != nullptr);
+                MapRef.MarkFiltered(SegmentSite, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
+
+                if (VisitedCells)
+                {
+                    VisitedCells->Emplace(MapRef.GetCell(SegmentSite));
+                }
+            }
+
+            SiteIt = SegmentSites.Last();
         }
+        // Find initial site
         else
         {
-            s = MapRef->Find(v);
-            MapRef.MarkFiltered(s, FeatureId.Type, FeatureId.Index, siteS, true);
+            SiteIt = MapRef->Find(v);
+            MapRef.MarkFiltered(SiteIt, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
         }
+    }
+
+    if (VisitedCells)
+    {
+        VisitedCells->Shrink();
     }
 }
 
-void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId)
+void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<const FJCVCell*>* VisitedCells)
 {
     if (Positions.Num() <= 0)
     {
@@ -153,6 +195,11 @@ void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVe
         {
             Cell->SetType(FeatureId.Type, FeatureId.Index);
             SearchSite = Site;
+
+            if (VisitedCells)
+            {
+                VisitedCells->Emplace(Cell);
+            }
         }
     }
 }
@@ -193,7 +240,7 @@ void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVecto
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID MAP"));
     }
 }
 
@@ -216,7 +263,7 @@ void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID,
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID MAP"));
     }
 }
 
@@ -261,7 +308,7 @@ void UJCVDiagramAccessor::ResetFeatures(FJCVFeatureId FeatureId)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID MAP"));
     }
 }
 
@@ -273,7 +320,7 @@ void UJCVDiagramAccessor::ApplyValueByFeatures(FJCVCellTraits FeatureTraits, flo
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID MAP"));
     }
 }
 
@@ -285,7 +332,7 @@ void UJCVDiagramAccessor::ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ConvertIsolated() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ConvertIsolated() ABORTED, INVALID MAP"));
     }
 }
 
@@ -304,16 +351,38 @@ void UJCVDiagramAccessor::ExpandFeature(FJCVFeatureId FeatureId)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ExpandFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ExpandFeature() ABORTED, INVALID MAP"));
     }
 }
 
-void UJCVDiagramAccessor::PointFillSubdivideFeatures(
-    const uint8 FeatureType,
-    const TArray<int32>& OriginCellIndices,
-    int32 SegmentCount,
-    int32 Seed
-    )
+void UJCVDiagramAccessor::PointFillIsolatedFeatures(int32 Seed, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature, const TArray<FJCVCellRef>& OriginCellRefs)
+{
+    if (HasValidMap())
+    {
+        FRandomStream Rand(Seed);
+
+        TArray<FJCVCell*> OriginCells;
+        OriginCells.Reserve(OriginCellRefs.Num());
+
+        for (int32 i=0; i<OriginCellRefs.Num(); ++i)
+        {
+            const FJCVCellRef& CellRef(OriginCellRefs[i]);
+
+            if (Map->IsValidCell(CellRef.Data))
+            {
+                OriginCells.Emplace(&Map->GetCell(CellRef.Data->GetIndex()));
+            }
+        }
+
+        FJCVFeatureUtility::PointFillIsolated(*Map, BoundingFeature, TargetFeature, OriginCells);
+    }
+    else
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::PointFillIsolatedFeatures() ABORTED, INVALID MAP"));
+    }
+}
+
+void UJCVDiagramAccessor::PointFillSubdivideFeatures(int32 Seed, uint8 FeatureType, int32 SegmentCount, const TArray<int32>& OriginCellIndices)
 {
     if (HasValidMap())
     {
@@ -329,7 +398,7 @@ void UJCVDiagramAccessor::PointFillSubdivideFeatures(
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::PointFillSubdivideFeatures() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::PointFillSubdivideFeatures() ABORTED, INVALID MAP"));
     }
 }
 
@@ -341,7 +410,7 @@ void UJCVDiagramAccessor::GroupByFeatures()
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GroupByFeatures() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GroupByFeatures() ABORTED, INVALID MAP"));
     }
 }
 
@@ -353,7 +422,7 @@ void UJCVDiagramAccessor::ShrinkFeatures()
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ShrinkFeatures() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ShrinkFeatures() ABORTED, INVALID MAP"));
     }
 }
 
@@ -361,7 +430,7 @@ void UJCVDiagramAccessor::ScaleFeatureValuesByIndex(uint8 FeatureType, int32 Ind
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ScaleFeatureValuesByIndex() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ScaleFeatureValuesByIndex() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -395,7 +464,7 @@ void UJCVDiagramAccessor::InvertFeatureValues(FJCVFeatureId FeatureId)
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::InvertFeatureValues() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::InvertFeatureValues() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -423,7 +492,7 @@ void UJCVDiagramAccessor::ApplyCurveToFeatureValues(uint8 FeatureType, UCurveFlo
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ApplyCurveToFeatureValues() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ApplyCurveToFeatureValues() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -459,7 +528,7 @@ void UJCVDiagramAccessor::MapNormalizedDistanceFromCell(FJCVCellRef OriginCellRe
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MapNormalizedDistanceFromCell() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MapNormalizedDistanceFromCell() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -484,7 +553,7 @@ FJCVPointGroup UJCVDiagramAccessor::GetFeaturePoints(FJCVFeatureId FeatureId)
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeaturePoints() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeaturePoints() ABORTED, INVALID MAP"));
         return PointGroup;
     }
 
@@ -515,7 +584,7 @@ FJCVCellRefGroup UJCVDiagramAccessor::GetFeatureCells(FJCVFeatureId FeatureId)
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeatureCells() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeatureCells() ABORTED, INVALID MAP"));
         return OutCellGroup;
     }
 
@@ -557,7 +626,7 @@ TArray<int32> UJCVDiagramAccessor::GetRandomCellWithinFeature(uint8 FeatureType,
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellWithinFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellWithinFeature() ABORTED, INVALID MAP"));
         return OutIndices;
     }
 
@@ -594,22 +663,90 @@ int32 UJCVDiagramAccessor::GetCellCount() const
     return Map ? Map->Num() : 0;
 }
 
-FJCVCellDetailsRef UJCVDiagramAccessor::GetCellDetails(const FJCVCellRef& CellRef)
+void UJCVDiagramAccessor::GetCellDetails(const FJCVCellRef& CellRef, FJCVCellDetailsRef& CellDetails)
 {
-    return FJCVCellDetailsRef(CellRef);
+    CellDetails.Set(CellRef);
 }
 
-TArray<FJCVCellDetailsRef> UJCVDiagramAccessor::GetCellGroupDetails(const TArray<FJCVCellRef> CellRefs)
+void UJCVDiagramAccessor::GetCellGroupDetails(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCellDetailsRef>& CellDetails)
 {
-    TArray<FJCVCellDetailsRef> Details;
-    Details.SetNum(CellRefs.Num());
+    CellDetails.SetNum(CellRefs.Num());
 
     for (int32 i=0; i<CellRefs.Num(); ++i)
     {
-        Details[i].Set(CellRefs[i].Data);
+        CellDetails[i].Set(CellRefs[i].Data);
+    }
+}
+
+void UJCVDiagramAccessor::GetNeighbourCells(const FJCVCellRef& CellRef, TArray<FJCVCellRef>& NeighbourCellRefs)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetNeighbourCells() ABORTED, INVALID MAP"));
+        return;
+    }
+    else
+    if (! Map->IsValidCell(CellRef.Data))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetNeighbourCells() ABORTED, INVALID ORIGIN CELL"));
+        return;
     }
 
-    return Details;
+    FJCVDiagramMap& MapRef(*Map);
+
+    TArray<const FJCVSite*> Neighbours;
+    MapRef->GetNeighbours(*CellRef.Data->Site, Neighbours);
+
+    NeighbourCellRefs.Reserve(Neighbours.Num());
+
+    for (int32 i=0; i<Neighbours.Num(); ++i)
+    {
+        const FJCVCell* Cell(MapRef.GetCell(Neighbours[i]));
+        check(Cell != nullptr);
+        NeighbourCellRefs.Emplace(Cell);
+    }
+}
+
+void UJCVDiagramAccessor::GetCellPositions(const TArray<FJCVCellRef>& CellRefs, TArray<FVector2D>& CellPositions)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetNeighbourCells() ABORTED, INVALID MAP"));
+        return;
+    }
+
+    CellPositions.Reserve(CellRefs.Num());
+
+    for (const FJCVCellRef& CellRef : CellRefs)
+    {
+        if (Map->IsValidCell(CellRef.Data))
+        {
+            CellPositions.Emplace(CellRef.Data->ToVector2DUnsafe());
+        }
+    }
+}
+
+void UJCVDiagramAccessor::GetCellWithinPolyFromCellGroup(const TArray<FJCVCellRef>& CellRefs, const TArray<FVector2D>& Points, FJCVCellRef& OutCellRef)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetNeighbourCells() ABORTED, INVALID MAP"));
+        return;
+    }
+
+    for (const FJCVCellRef& CellRef : CellRefs)
+    {
+        if (Map->IsValidCell(CellRef.Data))
+        {
+            const FVector2D CellPos(CellRef.Data->ToVector2DUnsafe());
+
+            if (UGULPolyUtilityLibrary::IsPointInPoly(CellPos, Points))
+            {
+                OutCellRef = CellRef;
+                break;
+            }
+        }
+    }
 }
 
 TArray<uint8> UJCVDiagramAccessor::GetNeighbourTypes(const FJCVCellRef& CellRef)
@@ -652,7 +789,7 @@ TArray<int32> UJCVDiagramAccessor::GetCellRange(const FVector2D& StartPosition, 
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID MAP"));
         return OutIndices;
     }
 
@@ -700,7 +837,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVFeatureId& 
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCell() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCell() ABORTED, INVALID MAP"));
         return CellRef;
     }
 
@@ -721,7 +858,7 @@ void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& Cells, int32 Seed,
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID MAP"));
         return;
     }
     if (Count <= 0)
@@ -935,7 +1072,7 @@ FJCVCellRefGroup UJCVDiagramAccessor::FindCells(const TArray<FVector2D>& Positio
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::FindCell() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::FindCell() ABORTED, INVALID MAP"));
         return CellGroup;
     }
 
@@ -1769,7 +1906,7 @@ FJCVCellRefGroup UJCVDiagramAccessor::GetCellByOriginRadius(
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellByOriginRadius() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellByOriginRadius() ABORTED, INVALID MAP"));
         return OutCellGroup;
     }
     
@@ -2054,7 +2191,7 @@ float UJCVDiagramAccessor::GetClosestDistanceToFeature(const FJCVCellRef& Origin
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetClosestDistanceToFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetClosestDistanceToFeature() ABORTED, INVALID MAP"));
         return 0.f;
     }
     
@@ -2079,7 +2216,7 @@ float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& Origi
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID MAP"));
         return 0.f;
     }
     
@@ -2165,7 +2302,7 @@ void UJCVDiagramAccessor::GenerateSegments(const TArray<FVector2D>& SegmentOrigi
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateSegments() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateSegments() ABORTED, INVALID MAP"));
     }
 }
 
@@ -2173,7 +2310,7 @@ void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, in
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -2207,7 +2344,7 @@ void UJCVDiagramAccessor::GenerateDualGeometry(FJCVDualGeometry& Geometry, bool 
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDualGeometry() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDualGeometry() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -2267,7 +2404,7 @@ void UJCVDiagramAccessor::GeneratePolyGeometry(FJCVPolyGeometry& Geometry, bool 
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GeneratePolyGeometry() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GeneratePolyGeometry() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -2384,7 +2521,7 @@ void UJCVDiagramAccessor::GenerateDualGeometryByFeature(FJCVDualGeometry& Geomet
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDualGeometry() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDualGeometry() ABORTED, INVALID MAP"));
         return;
     }
 
@@ -2467,7 +2604,7 @@ void UJCVDiagramAccessor::GeneratePolyGeometryByFeature(UPARAM(ref) FJCVPolyGeom
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GeneratePolyGeometryByFeature() ABORTED, INVALID ISLAND"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GeneratePolyGeometryByFeature() ABORTED, INVALID MAP"));
         return;
     }
 

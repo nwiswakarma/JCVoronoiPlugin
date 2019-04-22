@@ -158,6 +158,24 @@ public:
         return (GetCellIndex(CellRef) >= 0);
     }
 
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    int32 GetCellCount() const;
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetCellDetails(const FJCVCellRef& CellRef, FJCVCellDetailsRef& CellDetails);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetCellGroupDetails(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCellDetailsRef>& CellDetails);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetNeighbourCells(const FJCVCellRef& CellRef, TArray<FJCVCellRef>& NeighbourCellRefs);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetCellPositions(const TArray<FJCVCellRef>& CellRefs, TArray<FVector2D>& CellPositions);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetCellWithinPolyFromCellGroup(const TArray<FJCVCellRef>& CellRefs, const TArray<FVector2D>& Points, FJCVCellRef& OutCellRef);
+
 // MARK FEATURE FUNCTIONS
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -170,7 +188,7 @@ public:
     void MarkFeaturesByValue(FJCVValueTraits ValueTraits);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous = true);
+    void MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous = true, bool bExtractVisitedCells = false);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits);
@@ -208,12 +226,10 @@ public:
     void ExpandFeature(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void PointFillSubdivideFeatures(
-        const uint8 FeatureType,
-        const TArray<int32>& OriginCellIndices,
-        int32 SegmentCount,
-        int32 Seed
-        );
+    void PointFillIsolatedFeatures(int32 Seed, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature, const TArray<FJCVCellRef>& OriginCellRefs);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void PointFillSubdivideFeatures(int32 Seed, uint8 FeatureType, int32 SegmentCount, const TArray<int32>& OriginCellIndices);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GroupByFeatures();
@@ -240,15 +256,6 @@ public:
     FJCVCellRefGroup GetFeatureCells(FJCVFeatureId FeatureId);
 
 // CELL QUERY FUNCTIONS
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    int32 GetCellCount() const;
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    FJCVCellDetailsRef GetCellDetails(const FJCVCellRef& CellRef);
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    TArray<FJCVCellDetailsRef> GetCellGroupDetails(const TArray<FJCVCellRef> CellRefs);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     TArray<uint8> GetNeighbourTypes(const FJCVCellRef& CellRef);
@@ -388,6 +395,6 @@ private:
         const FJCVCell& Cell2
         ) const;
 
-    void MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId);
-    void MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId);
+    void MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<const FJCVCell*>* VisitedCells = nullptr);
+    void MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<const FJCVCell*>* VisitedCells = nullptr);
 };

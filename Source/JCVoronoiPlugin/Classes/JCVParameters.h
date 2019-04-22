@@ -178,6 +178,11 @@ struct JCVORONOIPLUGIN_API FJCVCellRef
     {
     }
 
+    FORCEINLINE void Set(const FJCVCell* Cell)
+    {
+        Data = Cell;
+    }
+
     bool HasValidCell() const
     {
         return Data != nullptr;
@@ -218,7 +223,7 @@ struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
 
     explicit FJCVCellDetailsRef(const FJCVCellRef& InCellRef)
     {
-        Set(InCellRef.Data);
+        Set(InCellRef);
     }
 
     explicit FJCVCellDetailsRef(const FJCVCell* InCell)
@@ -227,6 +232,11 @@ struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
     }
 
     void Set(const FJCVCell* InCell);
+
+    FORCEINLINE void Set(const FJCVCellRef& InCellRef)
+    {
+        Set(InCellRef.Data);
+    }
 };
 
 USTRUCT(BlueprintType)

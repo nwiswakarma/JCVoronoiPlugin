@@ -276,7 +276,7 @@ void FJCVDiagramMap::GenerateNeighbourList()
     }
 }
 
-void FJCVDiagramMap::MarkFiltered(const FJCVSite* InSite, uint8 FeatureType, int32 FeatureIndex, TSet<const FJCVSite*> FilterSet, bool bAddToFilterIfMarked)
+void FJCVDiagramMap::MarkFiltered(const FJCVSite* InSite, uint8 FeatureType, int32 FeatureIndex, TSet<const FJCVSite*>& FilterSet, bool bAddToFilterIfMarked)
 {
     if (InSite && ! FilterSet.Contains(InSite))
     {
