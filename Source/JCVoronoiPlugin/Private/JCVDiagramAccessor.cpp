@@ -32,46 +32,63 @@
 
 #include "Poly/GULPolyUtilityLibrary.h"
 
+void UJCVDiagramAccessor::GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCell*>& Cells) const
+{
+    check(Map != nullptr);
+
+    Cells.Reserve(CellRefs.Num());
+
+    for (int32 i=0; i<CellRefs.Num(); ++i)
+    {
+        const FJCVCellRef& CellRef(CellRefs[i]);
+
+        if (Map->IsValidCell(CellRef.Data))
+        {
+            Cells.Emplace(&Map->GetCell(CellRef.Data->GetIndex()));
+        }
+    }
+}
+
 // MARK FEATURE FUNCTIONS
 
-void UJCVDiagramAccessor::MarkUnmarkedFeatures(uint8 FeatureType)
-{
-    if (HasValidMap())
-    {
-        FJCVCellTraits CellTraits(EJCVCellFeature::UNDEFINED, FeatureType);
-        FJCVValueGenerator::MarkFeatures(*Map, CellTraits);
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkUnmarkedFeatures() ABORTED, INVALID MAP"));
-    }
-}
+//void UJCVDiagramAccessor::MarkUnmarkedFeatures(uint8 FeatureType)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVCellTraits_Deprecated CellTraits(EJCVCellFeature::UNDEFINED, FeatureType);
+//        FJCVValueGenerator::MarkFeatures(*Map, CellTraits);
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkUnmarkedFeatures() ABORTED, INVALID MAP"));
+//    }
+//}
 
-void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraits FeatureTraits)
-{
-    if (HasValidMap())
-    {
-        FJCVValueGenerator::MarkFeatures(*Map, FeatureTraits);
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID MAP"));
-    }
-}
+//void UJCVDiagramAccessor::MarkFeaturesByType(FJCVCellTraits_Deprecated FeatureTraits)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVValueGenerator::MarkFeatures(*Map, FeatureTraits);
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID MAP"));
+//    }
+//}
 
-void UJCVDiagramAccessor::MarkFeaturesByValue(FJCVValueTraits ValueTraits)
-{
-    if (HasValidMap())
-    {
-        FJCVValueGenerator::MarkFeatures(*Map, ValueTraits);
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID MAP"));
-    }
-}
+//void UJCVDiagramAccessor::MarkFeaturesByValue(FJCVValueTraits_Deprecated ValueTraits)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVValueGenerator::MarkFeatures(*Map, ValueTraits);
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID MAP"));
+//    }
+//}
 
-void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous, bool bExtractVisitedCells)
+void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous, bool bClampPoints, bool bExtractVisitedCells)
 {
     if (! HasValidMap())
     {
@@ -84,16 +101,16 @@ void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, co
         return;
     }
 
-    TArray<const FJCVCell*> VisitedCells;
-    TArray<const FJCVCell*>* VisitedCellsPtr = bExtractVisitedCells ? &VisitedCells : nullptr;
+    TArray<FJCVCell*> VisitedCells;
+    TArray<FJCVCell*>* VisitedCellsPtr = bExtractVisitedCells ? &VisitedCells : nullptr;
 
     if (bContiguous)
     {
-        MarkPositionsContiguous(*Map, Positions, FeatureId, VisitedCellsPtr);
+        MarkPositionsContiguous(Positions, FeatureId, VisitedCellsPtr, bClampPoints);
     }
     else
     {
-        MarkPositions(*Map, Positions, FeatureId, VisitedCellsPtr);
+        MarkPositions(Positions, FeatureId, VisitedCellsPtr, bClampPoints);
     }
 
     if (bExtractVisitedCells)
@@ -107,14 +124,306 @@ void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, co
     }
 }
 
-void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<const FJCVCell*>* VisitedCells)
+void UJCVDiagramAccessor::MarkPoly(const TArray<FVector2D>& Points, FJCVFeatureId FeatureMarkId, bool bClampPoints)
 {
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPositions() ABORTED, INVALID MAP"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkPoly() ABORTED, INVALID MAP"));
+        return;
+    }
+    if (Points.Num() < 3)
+    {
         return;
     }
 
+    TArray<FJCVCell*> BoundingCells;
+
+    MarkPositionsContiguous(Points, FeatureMarkId, &BoundingCells, bClampPoints);
+    MarkIsolatedFeatures(BoundingCells, FeatureMarkId);
+}
+
+void UJCVDiagramAccessor::MarkIsolatedFeatures(const TArray<FJCVCellRef>& BoundingCellRefs, FJCVFeatureId FeatureMarkId)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkIsolatedFeatures() ABORTED, INVALID MAP"));
+        return;
+    }
+    if (BoundingCellRefs.Num() < 3)
+    {
+        return;
+    }
+
+    TArray<FJCVCell*> BoundingCells;
+    GetCellsFromRefs(BoundingCellRefs, BoundingCells);
+
+    MarkIsolatedFeatures(BoundingCells, FeatureMarkId);
+}
+
+void UJCVDiagramAccessor::MarkIsolatedFeatures(const TArray<FJCVCell*>& BoundingCells, const FJCVFeatureId& FeatureMarkId)
+{
+    check(HasValidMap());
+
+    if (BoundingCells.Num() < 3)
+    {
+        return;
+    }
+
+    const int32 BoundingCellCount = BoundingCells.Num();
+
+    // Generate bounding poly
+
+    TArray<FVector2D> BoundingPoly;
+    BoundingPoly.Reserve(BoundingCells.Num());
+
+    for (const FJCVCell* BoundingCell : BoundingCells)
+    {
+        BoundingPoly.Emplace(BoundingCell->ToVector2DUnsafe());
+    }
+
+    // Generate expanded cell set
+
+    TSet<FJCVCell*> ExpandCellSet;
+    ExpandCellSet.Reserve(BoundingCellCount*3);
+
+    FJCVFeatureUtility::ExpandVisit(
+        *Map,
+        1,
+        BoundingCells,
+        [&ExpandCellSet,FeatureMarkId](FJCVCell& Cell, FJCVCell& NeighbourCell)
+        {
+            ExpandCellSet.Emplace(&NeighbourCell);
+            return false;
+        } );
+
+    // Iterate through expanded cell set and mark cell within boundin poly
+
+    while (ExpandCellSet.Num() > 0)
+    {
+        FJCVCell* InitialCell = *ExpandCellSet.CreateIterator();
+        FVector2D InitialCellOrigin = InitialCell->ToVector2DUnsafe();
+
+        // Cell is within poly, mark feature by point fill with the cell as origin
+        if (UGULPolyUtilityLibrary::IsPointInPoly(InitialCellOrigin, BoundingPoly))
+        {
+            // Mark feature and remove cell from candidate set
+            InitialCell->SetType(FeatureMarkId.Type, FeatureMarkId.Index);
+            ExpandCellSet.Remove(InitialCell);
+
+            FJCVFeatureUtility::PointFillVisit(
+                *Map,
+                { InitialCell },
+                [&ExpandCellSet,FeatureMarkId](FJCVCell& CurrentCell, FJCVCell& NeighbourCell)
+                {
+                    // Remove neighbour cell from candidate set
+                    if (ExpandCellSet.Contains(&NeighbourCell))
+                    {
+                        ExpandCellSet.Remove(&NeighbourCell);
+                    }
+                    // If not yet marked, mark neighbour cell and add to visit cell queue
+                    if (! NeighbourCell.IsType(FeatureMarkId.Type, FeatureMarkId.Index))
+                    {
+                        NeighbourCell.SetType(FeatureMarkId.Type, FeatureMarkId.Index);
+                        return true;
+                    }
+                    // Otherwise, don't add to visit cell queue
+                    else
+                    {
+                        return false;
+                    }
+                } );
+        }
+        // Otherwise, exclude the cell and any neighbouring cells
+        // from the feature candidate set
+        else
+        {
+            TQueue<FJCVCell*> ExclusionQueue;
+            ExclusionQueue.Enqueue(InitialCell);
+
+            while (! ExclusionQueue.IsEmpty())
+            {
+                FJCVCell* ExcludeCell;
+                ExclusionQueue.Dequeue(ExcludeCell);
+
+                ExpandCellSet.Remove(ExcludeCell);
+
+                TArray<FJCVCell*> NeighbourCells;
+                Map->GetNeighbourCells(*ExcludeCell, NeighbourCells);
+
+                for (FJCVCell* NeighbourCell : NeighbourCells)
+                {
+                    if (ExpandCellSet.Contains(NeighbourCell))
+                    {
+                        ExclusionQueue.Enqueue(NeighbourCell);
+                    }
+                }
+            }
+        }
+    }
+
+// Fill isolate method
+#if 0
+    struct FIsolateData
+    {
+        TSet<FJCVCell*> CellSet;
+        bool bIsInsideBounds = true;
+    };
+    TArray<FIsolateData> Isolates;
+
+    while (ExpandCellSet.Num() > 0)
+    {
+        Isolates.SetNum(Isolates.Num()+1, false);
+        FIsolateData& Isolate(Isolates.Last());
+
+#if 1
+        TFunctionRef<bool(FJCVCell&,FJCVCell&)> VisitCallback(
+            [&ExpandCellSet,&BoundingCellSet,&Isolate](FJCVCell& CurrentCell, FJCVCell& NeighbourCell)
+            {
+                if (! Isolate.CellSet.Contains(&CurrentCell))
+                {
+                    Isolate.CellSet.Emplace(&CurrentCell);
+
+                    if (Isolate.bIsInsideBounds && CurrentCell.IsBorder())
+                    {
+                        Isolate.bIsInsideBounds = false;
+                    }
+
+                    if (ExpandCellSet.Contains(&CurrentCell))
+                    {
+                        ExpandCellSet.Remove(&CurrentCell);
+                    }
+                }
+
+                return !BoundingCellSet.Contains(&NeighbourCell);
+            } );
+
+        FJCVFeatureUtility::PointFillVisit(*Map, { *ExpandCellSet.CreateIterator() }, VisitCallback);
+
+        if (Isolate.bIsInsideBounds)
+        UE_LOG(LogTemp,Warning, TEXT("Expand Group: %d"), Isolates.Num());
+#else
+        FJCVCell* InitialCell = *ExpandCellSet.CreateIterator();
+
+        Isolate.CellSet.Emplace(InitialCell);
+        ExpandCellSet.Remove(InitialCell);
+
+        if (Isolate.bIsInsideBounds && InitialCell->IsBorder())
+        {
+            Isolate.bIsInsideBounds = false;
+        }
+
+        TFunctionRef<bool(FJCVCell&,FJCVCell&)> VisitCallback(
+            [&ExpandCellSet,&BoundingCellSet,&Isolate](FJCVCell& CurrentCell, FJCVCell& NeighbourCell)
+            {
+                bool bIsNeighbourAlreadyVisited = Isolate.CellSet.Contains(&NeighbourCell);
+
+                if (! bIsNeighbourAlreadyVisited)
+                {
+                    Isolate.CellSet.Emplace(&NeighbourCell);
+
+                    if (Isolate.bIsInsideBounds && NeighbourCell.IsBorder())
+                    {
+                        Isolate.bIsInsideBounds = false;
+                    }
+
+                    if (ExpandCellSet.Contains(&NeighbourCell))
+                    {
+                        ExpandCellSet.Remove(&NeighbourCell);
+                    }
+                }
+
+                return !BoundingCellSet.Contains(&NeighbourCell) || !bIsNeighbourAlreadyVisited;
+            } );
+
+        FJCVFeatureUtility::PointFillVisit(*Map, { InitialCell }, VisitCallback);
+
+        if (Isolate.bIsInsideBounds)
+        UE_LOG(LogTemp,Warning, TEXT("Expand Group: %d"), Isolates.Num());
+#endif
+    }
+
+    for (const FIsolateData& Isolate : Isolates)
+    {
+        if (Isolate.bIsInsideBounds)
+        {
+            for (FJCVCell* Cell : Isolate.CellSet)
+            {
+                Cell->SetType(FeatureMarkId.Type, FeatureMarkId.Index);
+            }
+        }
+    }
+#endif
+
+// Cell orientation method
+#if 0
+    TArray<FJCVCell*> InnerCells;
+
+    // Find and mark inner cells, shared neighbour of two bounding cells
+    // within bounding orientation
+    {
+        const FJCVCell* Cell0;
+        const FJCVCell* Cell1 = BoundingCells.Last();
+
+        TSet<FJCVCell*> Neighbours0;
+        TSet<FJCVCell*> Neighbours1;
+
+        Map->GetNeighbourCells(*Cell1, Neighbours1);
+
+        for (int32 i=0; i<BoundingCellCount; ++i)
+        {
+            Cell0 = Cell1;
+            Cell1 = BoundingCells[i];
+
+            Neighbours0 = Neighbours1;
+            Neighbours1.Reset();
+
+            Map->GetNeighbourCells(*Cell1, Neighbours1);
+
+            TSet<FJCVCell*> SharedNeighbours(Neighbours1.Intersect(Neighbours0));
+            int32 ValidNeighbourCount = 0;
+
+            FVector2D Pos0(Cell0->ToVector2DUnsafe());
+            FVector2D Pos1(Cell1->ToVector2DUnsafe());
+
+            FVector2D Delta01 = Pos1 - Pos0;
+            FVector2D MidPt = Pos0 + .5f*Delta01;
+
+            Delta01 = FVector2D(-Delta01.Y, Delta01.X);
+
+            for (FJCVCell* Cell2 : SharedNeighbours)
+            {
+                if (Cell2->IsType(FeatureMarkId.Type, FeatureMarkId.Index))
+                {
+                    continue;
+                }
+
+                FVector2D Pos2(Cell2->ToVector2DUnsafe());
+                FVector2D DeltaM2 = Pos2 - MidPt;
+
+                if ((Delta01 | DeltaM2) > KINDA_SMALL_NUMBER)
+                {
+                    Cell2->SetType(FeatureMarkId.Type, FeatureMarkId.Index);
+                    InnerCells.Emplace(Cell2);
+                }
+            }
+        }
+    }
+
+    // Point fill inner cells to mark the remaining isolated cells
+    FJCVFeatureUtility::PointFillIsolated(
+        *Map,
+        FeatureMarkId,
+        FeatureMarkId,
+        InnerCells
+        );
+#endif
+}
+
+void UJCVDiagramAccessor::MarkPositionsContiguous(const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<FJCVCell*>* VisitedCells, bool bClampPoints)
+{
+    check(HasValidMap())
+
+    FJCVDiagramMap& MapRef(*Map);
     const int32 PointCount = Positions.Num();
     const int32 SiteCount = MapRef.Num();
     const int32 ReserveCount = FMath::Min(PointCount, SiteCount);
@@ -130,12 +439,20 @@ void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const 
     TArray<const FJCVSite*> SegmentSites;
     const FJCVSite* SiteIt = nullptr;
 
-    for (const FVector2D& v : Positions)
+    const FBox2D& Bounds(MapRef.GetBounds());
+
+    for (FVector2D Point : Positions)
     {
+        // Clamp point if required
+        if (bClampPoints)
+        {
+            Point = FMath::Clamp(Point, Bounds.Min, Bounds.Max);
+        }
+
         if (SiteIt)
         {
             SegmentSites.Reset();
-            MapRef->FindAllTo(v, *SiteIt, SegmentSites);
+            MapRef->FindAllTo(Point, *SiteIt, SegmentSites);
 
             if (VisitedCells)
             {
@@ -158,8 +475,13 @@ void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const 
         // Find initial site
         else
         {
-            SiteIt = MapRef->Find(v);
+            SiteIt = MapRef->Find(Point);
             MapRef.MarkFiltered(SiteIt, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
+
+            if (VisitedCells)
+            {
+                VisitedCells->Emplace(MapRef.GetCell(SiteIt));
+            }
         }
     }
 
@@ -169,16 +491,21 @@ void UJCVDiagramAccessor::MarkPositionsContiguous(FJCVDiagramMap& MapRef, const 
     }
 }
 
-void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<const FJCVCell*>* VisitedCells)
+void UJCVDiagramAccessor::MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<FJCVCell*>* VisitedCells, bool bClampPoints)
 {
     if (Positions.Num() <= 0)
     {
         return;
     }
 
+    check(HasValidMap());
+
+    FJCVDiagramMap& MapRef(*Map);
     const FJCVSite* SearchSite = MapRef->FindClosest(Positions[0]);
 
-    for (const FVector2D& Point : Positions)
+    const FBox2D& Bounds(MapRef.GetBounds());
+
+    for (FVector2D Point : Positions)
     {
         check(SearchSite);
 
@@ -186,6 +513,12 @@ void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVe
         if (! SearchSite)
         {
             break;
+        }
+
+        // Clamp point if required
+        if (bClampPoints)
+        {
+            Point = FMath::Clamp(Point, Bounds.Min, Bounds.Max);
         }
 
         const FJCVSite* Site = MapRef->FindFrom(Point, *SearchSite);
@@ -204,68 +537,68 @@ void UJCVDiagramAccessor::MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVe
     }
 }
 
-void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits)
-{
-    if (HasValidMap())
-    {
-        FJCVDiagramMap& MapRef(*Map);
-        const FBox2D& Bounds(GetBounds());
-        const FVector2D& v0(StartPosition);
-        const FVector2D& v1(EndPosition);
+//void UJCVDiagramAccessor::MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits_Deprecated FilterTraits)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVDiagramMap& MapRef(*Map);
+//        const FBox2D& Bounds(GetBounds());
+//        const FVector2D& v0(StartPosition);
+//        const FVector2D& v1(EndPosition);
+//
+//        if (! Bounds.IsInside(v0) || ! Bounds.IsInside(v1))
+//        {
+//            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID INPUT POSITIONS"));
+//            return;
+//        }
+//
+//        const FJCVSite* s0 = MapRef->Find(v0);
+//
+//        if (s0)
+//        {
+//            TSet<const FJCVSite*> Sites;
+//            Sites.Reserve(MapRef.Num()/4);
+//            Sites.Emplace(s0);
+//            MapRef->FindAllTo(v1, *s0, Sites);
+//            for (const FJCVSite* site : Sites)
+//            {
+//                FJCVCell* cell = MapRef.GetCell(site);
+//                check(cell);
+//                if (cell && (!bUseFilter || FilterTraits.HasValidFeature(*cell)))
+//                {
+//                    cell->SetFeature(Value, FeatureId.Type, FeatureId.Index);
+//                }
+//            }
+//        }
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID MAP"));
+//    }
+//}
 
-        if (! Bounds.IsInside(v0) || ! Bounds.IsInside(v1))
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID INPUT POSITIONS"));
-            return;
-        }
-
-        const FJCVSite* s0 = MapRef->Find(v0);
-
-        if (s0)
-        {
-            TSet<const FJCVSite*> Sites;
-            Sites.Reserve(MapRef.Num()/4);
-            Sites.Emplace(s0);
-            MapRef->FindAllTo(v1, *s0, Sites);
-            for (const FJCVSite* site : Sites)
-            {
-                FJCVCell* cell = MapRef.GetCell(site);
-                check(cell);
-                if (cell && (!bUseFilter || FilterTraits.HasValidFeature(*cell)))
-                {
-                    cell->SetFeature(Value, FeatureId.Type, FeatureId.Index);
-                }
-            }
-        }
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRange() ABORTED, INVALID MAP"));
-    }
-}
-
-void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits)
-{
-    if (HasValidMap())
-    {
-        FJCVDiagramMap& MapRef( *Map );
-
-        if (MapRef.IsValidIndex(StartCellID) && MapRef.IsValidIndex(EndCellID))
-        {
-            FVector2D v0(MapRef.GetCell(StartCellID).ToVector2D());
-            FVector2D v1(MapRef.GetCell(EndCellID).ToVector2D());
-            MarkRange(v0, v1, FeatureId, Value, bUseFilter, FilterTraits);
-        }
-        else
-        {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID INPUT POSITIONS"));
-        }
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID MAP"));
-    }
-}
+//void UJCVDiagramAccessor::MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits_Deprecated FilterTraits)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVDiagramMap& MapRef( *Map );
+//
+//        if (MapRef.IsValidIndex(StartCellID) && MapRef.IsValidIndex(EndCellID))
+//        {
+//            FVector2D v0(MapRef.GetCell(StartCellID).ToVector2D());
+//            FVector2D v1(MapRef.GetCell(EndCellID).ToVector2D());
+//            MarkRange(v0, v1, FeatureId, Value, bUseFilter, FilterTraits);
+//        }
+//        else
+//        {
+//            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID INPUT POSITIONS"));
+//        }
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkRangeByFeature() ABORTED, INVALID MAP"));
+//    }
+//}
 
 // FEATURE UTILITY FUNCTIONS
 
@@ -308,21 +641,21 @@ void UJCVDiagramAccessor::ResetFeatures(FJCVFeatureId FeatureId)
     }
     else
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByType() ABORTED, INVALID MAP"));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ResetFeatures() ABORTED, INVALID MAP"));
     }
 }
 
-void UJCVDiagramAccessor::ApplyValueByFeatures(FJCVCellTraits FeatureTraits, float Value)
-{
-    if (HasValidMap())
-    {
-        FJCVValueGenerator::ApplyValueByFeatures(*Map, FeatureTraits, Value);
-    }
-    else
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MarkFeaturesByValue() ABORTED, INVALID MAP"));
-    }
-}
+//void UJCVDiagramAccessor::ApplyValueByFeatures(FJCVCellTraits_Deprecated FeatureTraits, float Value)
+//{
+//    if (HasValidMap())
+//    {
+//        FJCVValueGenerator::ApplyValueByFeatures(*Map, FeatureTraits, Value);
+//    }
+//    else
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ApplyValueByFeatures() ABORTED, INVALID MAP"));
+//    }
+//}
 
 void UJCVDiagramAccessor::ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1, int32 FeatureIndex, bool bGroupFeatures)
 {
@@ -355,12 +688,33 @@ void UJCVDiagramAccessor::ExpandFeature(FJCVFeatureId FeatureId)
     }
 }
 
-void UJCVDiagramAccessor::PointFillIsolatedFeatures(int32 Seed, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature, const TArray<FJCVCellRef>& OriginCellRefs)
+void UJCVDiagramAccessor::ExpandFeatureFromCellGroups(const TArray<FJCVCellRef>& CellRefs, FJCVFeatureId FeatureId, int32 ExpandCount)
 {
     if (HasValidMap())
     {
-        FRandomStream Rand(Seed);
+        TArray<FJCVCell*> Cells;
+        Cells.Reserve(CellRefs.Num());
 
+        for (const FJCVCellRef& CellRef : CellRefs)
+        {
+            if (Map->IsValidCell(CellRef.Data))
+            {
+                Cells.Emplace(&Map->GetCell(CellRef.Data->GetIndex()));
+            }
+        }
+
+        FJCVFeatureUtility::ExpandFeatureFromCellGroups(*Map, Cells, FeatureId, ExpandCount);
+    }
+    else
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::ExpandFeature() ABORTED, INVALID MAP"));
+    }
+}
+
+void UJCVDiagramAccessor::PointFillIsolatedFeatures(const TArray<FJCVCellRef>& OriginCellRefs, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature)
+{
+    if (HasValidMap())
+    {
         TArray<FJCVCell*> OriginCells;
         OriginCells.Reserve(OriginCellRefs.Num());
 
@@ -382,7 +736,7 @@ void UJCVDiagramAccessor::PointFillIsolatedFeatures(int32 Seed, FJCVFeatureId Bo
     }
 }
 
-void UJCVDiagramAccessor::PointFillSubdivideFeatures(int32 Seed, uint8 FeatureType, int32 SegmentCount, const TArray<int32>& OriginCellIndices)
+void UJCVDiagramAccessor::PointFillSubdivideFeatures(const TArray<int32>& OriginCellIndices, int32 Seed, uint8 FeatureType, int32 SegmentCount)
 {
     if (HasValidMap())
     {
@@ -726,7 +1080,12 @@ void UJCVDiagramAccessor::GetCellPositions(const TArray<FJCVCellRef>& CellRefs, 
     }
 }
 
-void UJCVDiagramAccessor::GetCellWithinPolyFromCellGroup(const TArray<FJCVCellRef>& CellRefs, const TArray<FVector2D>& Points, FJCVCellRef& OutCellRef)
+void UJCVDiagramAccessor::GetCellWithinPolyFromCellGroup(
+    const TArray<FJCVCellRef>& CellRefs,
+    const TArray<FVector2D>& Points,
+    const FJCVCellTraits& FilterTraits,
+    FJCVCellRef& OutCellRef
+    )
 {
     if (! HasValidMap())
     {
@@ -736,9 +1095,11 @@ void UJCVDiagramAccessor::GetCellWithinPolyFromCellGroup(const TArray<FJCVCellRe
 
     for (const FJCVCellRef& CellRef : CellRefs)
     {
-        if (Map->IsValidCell(CellRef.Data))
+        const FJCVCell* Cell = CellRef.Data;
+
+        if (Map->IsValidCell(Cell) && FilterTraits.HasMatchingTraits(Cell))
         {
-            const FVector2D CellPos(CellRef.Data->ToVector2DUnsafe());
+            const FVector2D CellPos(Cell->ToVector2DUnsafe());
 
             if (UGULPolyUtilityLibrary::IsPointInPoly(CellPos, Points))
             {
@@ -2306,39 +2667,39 @@ void UJCVDiagramAccessor::GenerateSegments(const TArray<FVector2D>& SegmentOrigi
     }
 }
 
-void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams)
-{
-    if (! HasValidMap())
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID MAP"));
-        return;
-    }
-
-    if (! IsValid(PlateAccessor) || ! PlateAccessor->HasValidMap())
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID PLATE ISLAND"));
-        return;
-    }
-
-    FJCVDiagramMap& plate( PlateAccessor->GetMap() );
-    FJCVDiagramMap& landscape( *Map );
-
-    // Generates orogeny
-    FRandomStream Rand(Seed);
-    FJCVPlateGenerator::FOrogenParams orogenParams(FillParams, OrogenParams.OriginThreshold, OrogenParams.bDivergentAsConvergent);
-    FJCVPlateGenerator::GenerateOrogeny(plate, landscape, orogenParams, Rand);
-
-    // Mark features with prepared set
-    FJCVCellSet cellS;
-    cellS.Reserve(landscape.Num());
-    const float threshold = OrogenParams.AreaThreshold;
-
-    // Assign Map Feature Type
-    FJCVValueTraits ValueTraits(threshold, 100.f, OrogenParams.FeatureType);
-    FJCVValueGenerator::MarkFeatures(landscape, ValueTraits, cellS);
-
-    landscape.GroupByFeatures();
-}
+//void UJCVDiagramAccessor::GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams)
+//{
+//    if (! HasValidMap())
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID MAP"));
+//        return;
+//    }
+//
+//    if (! IsValid(PlateAccessor) || ! PlateAccessor->HasValidMap())
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateOrogeny() ABORTED, INVALID PLATE ISLAND"));
+//        return;
+//    }
+//
+//    FJCVDiagramMap& plate( PlateAccessor->GetMap() );
+//    FJCVDiagramMap& landscape( *Map );
+//
+//    // Generates orogeny
+//    FRandomStream Rand(Seed);
+//    FJCVPlateGenerator::FOrogenParams orogenParams(FillParams, OrogenParams.OriginThreshold, OrogenParams.bDivergentAsConvergent);
+//    FJCVPlateGenerator::GenerateOrogeny(plate, landscape, orogenParams, Rand);
+//
+//    // Mark features with prepared set
+//    FJCVCellSet cellS;
+//    cellS.Reserve(landscape.Num());
+//    const float threshold = OrogenParams.AreaThreshold;
+//
+//    // Assign Map Feature Type
+//    FJCVValueTraits_Deprecated ValueTraits(threshold, 100.f, OrogenParams.FeatureType);
+//    FJCVValueGenerator::MarkFeatures(landscape, ValueTraits, cellS);
+//
+//    landscape.GroupByFeatures();
+//}
 
 void UJCVDiagramAccessor::GenerateDualGeometry(FJCVDualGeometry& Geometry, bool bClearContainer)
 {

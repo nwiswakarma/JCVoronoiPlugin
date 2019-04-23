@@ -264,8 +264,7 @@ public:
     }
 
     /**
-     * Find a site which origin is closer to the specified point than the
-     * specified site origin.
+     * Find a site with closer origin to a point than the specified site.
      *
      * Return a valid site if found. Otherwise, return nullptr.
      */

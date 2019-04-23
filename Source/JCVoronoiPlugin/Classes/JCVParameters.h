@@ -28,6 +28,7 @@
 #pragma once
 
 #include "CoreUObject.h"
+#include "Kismet/BlueprintFunctionLibrary.h"
 #include "JCVParameters.generated.h"
 
 class UJCVDiagramObject;
@@ -47,6 +48,12 @@ struct JCVORONOIPLUGIN_API FJCVFeatureId
     int32 Index;
 
     FJCVFeatureId() = default;
+
+    FJCVFeatureId(uint8 InType)
+        : Type(InType)
+        , Index(-1)
+    {
+    }
 
     FJCVFeatureId(uint8 InType, int32 InIndex)
         : Type(InType)
@@ -79,56 +86,89 @@ struct JCVORONOIPLUGIN_API FJCVRadialFill
     bool bFilterBorder = true;
 };
 
-USTRUCT(BlueprintType, Blueprintable)
+USTRUCT(BlueprintType)
 struct JCVORONOIPLUGIN_API FJCVCellTraits
 {
-	GENERATED_BODY()
+	GENERATED_USTRUCT_BODY()
 
-	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
-    uint8 TestType = 255;
+    typedef TFunction<bool(const FJCVCell&)> FFilterCallback;
 
-	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
-    uint8 FeatureType;
+    FFilterCallback FilterCallback;
 
     FJCVCellTraits() = default;
+    FJCVCellTraits(const FFilterCallback& InFilterCallback);
 
-    FJCVCellTraits(uint8 f)
-        : FeatureType(f)
+    FORCEINLINE bool HasValidCallback() const
     {
+        return !!FilterCallback;
     }
 
-    FJCVCellTraits(uint8 t, uint8 f)
-        : TestType(t)
-        , FeatureType(f)
+    FORCEINLINE bool HasMatchingTraits(const FJCVCell* Cell) const
     {
+        return Cell ? HasMatchingTraits(*Cell) : false;
     }
 
-    virtual bool HasValidFeature(const FJCVCell& c) const;
-    virtual bool HasUndefinedType(const FJCVCell& c) const;
+    FORCEINLINE bool HasMatchingTraits(const FJCVCell& Cell) const
+    {
+        return HasValidCallback() ? FilterCallback(Cell) : true;
+    }
+
+    FORCEINLINE const FFilterCallback* GetCallbackRef() const
+    {
+        return HasValidCallback() ? &FilterCallback : nullptr;
+    }
 };
 
-USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVValueTraits : public FJCVCellTraits
-{
-	GENERATED_BODY()
+//USTRUCT(BlueprintType, Blueprintable)
+//struct JCVORONOIPLUGIN_API FJCVCellTraits_Deprecated
+//{
+//	GENERATED_BODY()
+//
+//	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+//    uint8 TestType = 255;
+//
+//	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+//    uint8 FeatureType;
+//
+//    FJCVCellTraits_Deprecated() = default;
+//
+//    FJCVCellTraits_Deprecated(uint8 f)
+//        : FeatureType(f)
+//    {
+//    }
+//
+//    FJCVCellTraits_Deprecated(uint8 t, uint8 f)
+//        : TestType(t)
+//        , FeatureType(f)
+//    {
+//    }
+//
+//    virtual bool HasValidFeature(const FJCVCell& c) const;
+//    virtual bool HasUndefinedType(const FJCVCell& c) const;
+//};
 
-	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
-    float ValueLo;
-
-	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
-    float ValueHi;
-
-    FJCVValueTraits() = default;
-
-    FJCVValueTraits(float l, float v, uint8 f)
-        : FJCVCellTraits(f)
-        , ValueLo(l)
-        , ValueHi(v)
-    {
-    }
-
-    virtual bool HasValidFeature(const FJCVCell& c) const override;
-};
+//USTRUCT(BlueprintType, Blueprintable)
+//struct JCVORONOIPLUGIN_API FJCVValueTraits_Deprecated : public FJCVCellTraits_Deprecated
+//{
+//	GENERATED_BODY()
+//
+//	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+//    float ValueLo;
+//
+//	UPROPERTY(Category = "JCV|Cell Traits", BlueprintReadWrite, EditAnywhere)
+//    float ValueHi;
+//
+//    FJCVValueTraits_Deprecated() = default;
+//
+//    FJCVValueTraits_Deprecated(float l, float v, uint8 f)
+//        : FJCVCellTraits_Deprecated(f)
+//        , ValueLo(l)
+//        , ValueHi(v)
+//    {
+//    }
+//
+//    virtual bool HasValidFeature(const FJCVCell& c) const override;
+//};
 
 USTRUCT(BlueprintType, Blueprintable)
 struct JCVORONOIPLUGIN_API FJCVOrogenParams
@@ -192,7 +232,7 @@ struct JCVORONOIPLUGIN_API FJCVCellRef
 USTRUCT(BlueprintType)
 struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
 {
-	GENERATED_BODY()
+	GENERATED_USTRUCT_BODY()
 
     const FJCVCell* Cell;
 
@@ -217,9 +257,7 @@ struct JCVORONOIPLUGIN_API FJCVCellDetailsRef
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 FeatureIndex;
 
-    FJCVCellDetailsRef() : bIsValid(false)
-    {
-    }
+    FJCVCellDetailsRef();
 
     explicit FJCVCellDetailsRef(const FJCVCellRef& InCellRef)
     {
@@ -321,4 +359,44 @@ struct JCVORONOIPLUGIN_API FJCVPolyGeometry
     {
         return Points.Num() >= 3 && PolyIndices.Num() >= 3;
     }
+};
+
+UCLASS()
+class UJCVTraitsLibrary : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+
+public:
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Feature Traits", AutoCreateRefTerm="SubTraits,FeatureId"))
+    static void K2_CreateFeatureTraits(
+        FJCVCellTraits& Traits,
+        const FJCVCellTraits& SubTraits,
+        const FJCVFeatureId& FeatureId,
+        bool bInvertResult = false
+        );
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Value Traits", AutoCreateRefTerm="SubTraits"))
+    static void K2_CreateValueTraits(
+        FJCVCellTraits& Traits,
+        const FJCVCellTraits& SubTraits,
+        float ValueLo = 0.f,
+        float ValueHi = 1.f,
+        bool bInvertResult = false
+        );
+
+    static void CreateFeatureTraits(
+        FJCVCellTraits& Traits,
+        FJCVFeatureId FeatureId,
+        bool bInvertResult = false,
+        const FJCVCellTraits::FFilterCallback* SubCallbackRef = nullptr
+        );
+
+    static void CreateValueTraits(
+        FJCVCellTraits& Traits,
+        float ValueLo = 0.f,
+        float ValueHi = 1.f,
+        bool bInvertResult = false,
+        const FJCVCellTraits::FFilterCallback* SubCallbackRef = nullptr
+        );
 };

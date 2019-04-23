@@ -37,7 +37,7 @@ class UJCVDiagramAccessor;
 
 class FJCVValueGenerator
 {
-    static int32 MarkFeature(FJCVDiagramMap& Map, TQueue<FJCVCell*>& cellQ, TSet<FJCVCell*>& ExclusionSet, FJCVCell& c, int32 i, const FJCVCellTraits& cond);
+    //static int32 MarkFeature(FJCVDiagramMap& Map, TQueue<FJCVCell*>& cellQ, TSet<FJCVCell*>& ExclusionSet, FJCVCell& c, int32 i, const FJCVCellTraits_Deprecated& cond);
 
 public:
 
@@ -50,33 +50,33 @@ public:
         AddRadialFill(Map, Rand, OriginCell, FillParams);
     }
 
-    static void MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits& Cond, FJCVCellSet& ExclusionSet);
+    //static void MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits_Deprecated& Cond, FJCVCellSet& ExclusionSet);
 
-    static void MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet);
+    //static void MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits_Deprecated& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet);
 
-    FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits& Cond)
-    {
-        TSet<FJCVCell*> ExclusionSet;
-        ExclusionSet.Reserve(Map.Num());
-        MarkFeatures(Map, Cond, ExclusionSet);
-    }
+    //FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits_Deprecated& Cond)
+    //{
+    //    TSet<FJCVCell*> ExclusionSet;
+    //    ExclusionSet.Reserve(Map.Num());
+    //    MarkFeatures(Map, Cond, ExclusionSet);
+    //}
 
-    FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits& Cond, int32 FeatureIndex)
-    {
-        TSet<FJCVCell*> ExclusionSet;
-        ExclusionSet.Reserve(Map.Num());
-        MarkFeatures(Map, Seed, Cond, FeatureIndex, ExclusionSet);
-    }
+    //FORCEINLINE static void MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits_Deprecated& Cond, int32 FeatureIndex)
+    //{
+    //    TSet<FJCVCell*> ExclusionSet;
+    //    ExclusionSet.Reserve(Map.Num());
+    //    MarkFeatures(Map, Seed, Cond, FeatureIndex, ExclusionSet);
+    //}
 
-    FORCEINLINE static void ApplyValueByFeatures(FJCVDiagramMap& Map, const FJCVCellTraits& Cond, float Value)
-    {
-        for (int32 i=0; i<Map.Num(); ++i)
-        {
-            FJCVCell& c( Map.GetCell(i) );
-            if (Cond.HasValidFeature(c))
-                c.Value = Value;
-        }
-    }
+    //FORCEINLINE static void ApplyValueByFeatures(FJCVDiagramMap& Map, const FJCVCellTraits_Deprecated& Cond, float Value)
+    //{
+    //    for (int32 i=0; i<Map.Num(); ++i)
+    //    {
+    //        FJCVCell& c( Map.GetCell(i) );
+    //        if (Cond.HasValidFeature(c))
+    //            c.Value = Value;
+    //    }
+    //}
 
     static float GetClosestDistanceFromCellSq(
         FJCVDiagramMap& Map,

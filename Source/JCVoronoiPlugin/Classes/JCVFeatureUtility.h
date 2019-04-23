@@ -40,7 +40,18 @@ class FJCVFeatureUtility
 {
 public:
 
-    static void PointFillVisit(FJCVDiagramMap& Map, const TArray<FJCVCell*>& OriginCells, const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback);
+    static void PointFillVisit(
+        FJCVDiagramMap& Map,
+        const TArray<FJCVCell*>& OriginCells,
+        const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
+        );
+
+    static void ExpandVisit(
+        FJCVDiagramMap& Map,
+        int32 ExpandCount,
+        const TArray<FJCVCell*>& OriginCells,
+        const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
+        );
 
     static void PointFill(FJCVDiagramMap& Map, const TArray<FJCVCell*>& OriginCells, uint8 FeatureTypeFilter = 255);
 
@@ -49,6 +60,13 @@ public:
         FJCVFeatureId BoundFeature,
         FJCVFeatureId TargetFeature,
         const TArray<FJCVCell*>& OriginCells
+        );
+
+    static void ExpandFeatureFromCellGroups(
+        FJCVDiagramMap& Map,
+        const TArray<FJCVCell*>& OriginCells,
+        const FJCVFeatureId& FeatureId,
+        int32 ExpandCount
         );
 
     static void GenerateSegmentExpands(
@@ -84,7 +102,7 @@ public:
 
     static void GetRandomCellWithinFeature(
         FJCVCellGroup& OutCells,
-        const FJCVDiagramMap& Map,
+        FJCVDiagramMap& Map,
         uint8 FeatureType,
         int32 CellCount,
         FRandomStream& Rand,

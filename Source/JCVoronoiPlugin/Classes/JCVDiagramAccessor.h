@@ -173,28 +173,46 @@ public:
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GetCellPositions(const TArray<FJCVCellRef>& CellRefs, TArray<FVector2D>& CellPositions);
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void GetCellWithinPolyFromCellGroup(const TArray<FJCVCellRef>& CellRefs, const TArray<FVector2D>& Points, FJCVCellRef& OutCellRef);
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="FilterTraits"))
+    void GetCellWithinPolyFromCellGroup(
+        const TArray<FJCVCellRef>& CellRefs,
+        const TArray<FVector2D>& Points,
+        const FJCVCellTraits& FilterTraits,
+        FJCVCellRef& OutCellRef
+        );
 
 // MARK FEATURE FUNCTIONS
 
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void MarkUnmarkedFeatures(uint8 FeatureType);
+
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void MarkFeaturesByType(FJCVCellTraits_Deprecated FeatureTraits);
+
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void MarkFeaturesByValue(FJCVValueTraits_Deprecated ValueTraits);
+
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits_Deprecated FilterTraits);
+
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits_Deprecated FilterTraits);
+
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkUnmarkedFeatures(uint8 FeatureType);
-
-    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Mark Unmarked Features By Type"))
-    void MarkFeaturesByType(FJCVCellTraits FeatureTraits);
-
-    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Mark Unmarked Features By Type"))
-    void MarkFeaturesByValue(FJCVValueTraits ValueTraits);
-
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous = true, bool bExtractVisitedCells = false);
+    void MarkPositions(
+        TArray<FJCVCellRef>& VisitedCellRefs,
+        const TArray<FVector2D>& Positions,
+        FJCVFeatureId FeatureId,
+        bool bContiguous = true,
+        bool bClampPoints = true,
+        bool bExtractVisitedCells = false
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRange(const FVector2D& StartPosition, const FVector2D& EndPosition, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits);
+    void MarkPoly(const TArray<FVector2D>& Points, FJCVFeatureId FeatureMarkId, bool bClampPoints = true);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void MarkRangeByFeature(int32 StartCellID, int32 EndCellID, FJCVFeatureId FeatureId, float Value, bool bUseFilter, FJCVCellTraits FilterTraits);
+    void MarkIsolatedFeatures(const TArray<FJCVCellRef>& BoundingCellRefs, FJCVFeatureId FeatureMarkId);
 
 // FEATURE UTILITY FUNCTIONS
 
@@ -216,8 +234,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="JCV")
     void ResetFeatures(FJCVFeatureId FeatureId);
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void ApplyValueByFeatures(FJCVCellTraits FeatureTraits, float Value);
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void ApplyValueByFeatures(FJCVCellTraits_Deprecated FeatureTraits, float Value);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void ConvertIsolated(uint8 FeatureType0, uint8 FeatureType1, int32 FeatureIndex, bool bGroupFeatures);
@@ -226,10 +244,13 @@ public:
     void ExpandFeature(FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void PointFillIsolatedFeatures(int32 Seed, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature, const TArray<FJCVCellRef>& OriginCellRefs);
+    void ExpandFeatureFromCellGroups(const TArray<FJCVCellRef>& CellRefs, FJCVFeatureId FeatureId, int32 ExpandCount = 1);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void PointFillSubdivideFeatures(int32 Seed, uint8 FeatureType, int32 SegmentCount, const TArray<int32>& OriginCellIndices);
+    void PointFillIsolatedFeatures(const TArray<FJCVCellRef>& OriginCellRefs, FJCVFeatureId BoundingFeature, FJCVFeatureId TargetFeature);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    void PointFillSubdivideFeatures(const TArray<int32>& OriginCellIndices, int32 Seed, uint8 FeatureType, int32 SegmentCount);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GroupByFeatures();
@@ -359,8 +380,8 @@ public:
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GenerateSegments(const TArray<FVector2D>& SegmentOrigins, int32 SegmentMergeCount, int32 Seed);
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams);
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //void GenerateOrogeny(UJCVDiagramAccessor* PlateAccessor, int32 Seed, FJCVRadialFill FillParams, const FJCVOrogenParams& OrogenParams);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GenerateDualGeometry(UPARAM(ref) FJCVDualGeometry& Geometry, bool bClearContainer = true);
@@ -395,6 +416,9 @@ private:
         const FJCVCell& Cell2
         ) const;
 
-    void MarkPositions(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<const FJCVCell*>* VisitedCells = nullptr);
-    void MarkPositionsContiguous(FJCVDiagramMap& MapRef, const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<const FJCVCell*>* VisitedCells = nullptr);
+    void MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<FJCVCell*>* VisitedCells = nullptr, bool bClampPoints = true);
+    void MarkPositionsContiguous(const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<FJCVCell*>* VisitedCells = nullptr, bool bClampPoints = true);
+    void MarkIsolatedFeatures(const TArray<FJCVCell*>& BoundingCells, const FJCVFeatureId& FeatureMarkId);
+
+    void GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCell*>& Cells) const;
 };

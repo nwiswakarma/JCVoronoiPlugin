@@ -1028,14 +1028,12 @@ public:
     }
 
     template<class FContainerType>
-    FORCEINLINE void GetNeighbourCells(const FJCVCell& c, FContainerType& OutCells) const
+    void GetNeighbourCells(const FJCVCell& c, FContainerType& OutCells)
     {
         if (const FJCVSite* Site = c.Site)
         {
             TArray<const FJCVSite*> Neighbours;
             Diagram.GetNeighbours(*Site, Neighbours);
-
-            OutCells.Reserve(OutCells.Num()+Neighbours.Num());
 
             for (const FJCVSite* ns : Neighbours)
             {

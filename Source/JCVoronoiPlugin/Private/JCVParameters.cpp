@@ -28,19 +28,36 @@
 #include "JCVParameters.h"
 #include "JCVDiagramMap.h"
 
-bool FJCVCellTraits::HasValidFeature(const FJCVCell& c) const
+FJCVCellTraits::FJCVCellTraits(const FFilterCallback& InFilterCallback)
+    : FilterCallback(InFilterCallback)
 {
-    return c.FeatureType == TestType;
 }
 
-bool FJCVCellTraits::HasUndefinedType(const FJCVCell& c) const
-{
-    return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
-}
+//bool FJCVCellTraits_Deprecated::HasValidFeature(const FJCVCell& c) const
+//{
+//    return c.FeatureType == TestType;
+//}
 
-bool FJCVValueTraits::HasValidFeature(const FJCVCell& c) const
+//bool FJCVCellTraits_Deprecated::HasUndefinedType(const FJCVCell& c) const
+//{
+//    return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
+//}
+
+//bool FJCVValueTraits_Deprecated::HasValidFeature(const FJCVCell& c) const
+//{
+//    return c.Value > ValueLo && c.Value < ValueHi;
+//}
+
+FJCVCellDetailsRef::FJCVCellDetailsRef()
+    : Cell(nullptr)
+    , bIsValid(false)
+    , Index(-1)
+    , Point(ForceInitToZero)
+    , Value(0.f)
+    , bIsBorder(false)
+    , FeatureType(255)
+    , FeatureIndex(-1)
 {
-    return c.Value > ValueLo && c.Value < ValueHi;
 }
 
 void FJCVCellDetailsRef::Set(const FJCVCell* InCell)
@@ -56,5 +73,100 @@ void FJCVCellDetailsRef::Set(const FJCVCell* InCell)
         bIsBorder    = Cell->bIsBorder;
         FeatureType  = Cell->FeatureType;
         FeatureIndex = Cell->FeatureIndex;
+    }
+}
+
+void UJCVTraitsLibrary::K2_CreateFeatureTraits(
+    FJCVCellTraits& Traits,
+    const FJCVCellTraits& SubTraits,
+    const FJCVFeatureId& FeatureId,
+    bool bInvertResult
+    )
+{
+    CreateFeatureTraits(
+        Traits,
+        FeatureId,
+        bInvertResult,
+        SubTraits.GetCallbackRef()
+        );
+}
+
+void UJCVTraitsLibrary::K2_CreateValueTraits(
+    FJCVCellTraits& Traits,
+    const FJCVCellTraits& SubTraits,
+    float ValueLo,
+    float ValueHi,
+    bool bInvertResult
+    )
+{
+    CreateValueTraits(
+        Traits,
+        ValueLo,
+        ValueHi,
+        bInvertResult,
+        SubTraits.GetCallbackRef()
+        );
+}
+
+void UJCVTraitsLibrary::CreateFeatureTraits(
+    FJCVCellTraits& Traits,
+    FJCVFeatureId FeatureId,
+    bool bInvertResult,
+    const FJCVCellTraits::FFilterCallback* SubCallbackRef
+    )
+{
+    bool bIsSubCallbackValid = SubCallbackRef && !!(*SubCallbackRef);
+    if (bIsSubCallbackValid)
+    {
+        FJCVCellTraits::FFilterCallback SubCallback(*SubCallbackRef);
+        Traits.FilterCallback =
+            [SubCallback,FeatureId,bInvertResult](const FJCVCell& Cell)
+            {
+                bool bResult;
+                bResult = Cell.IsType(FeatureId.Type, FeatureId.Index);
+                bResult = bResult && SubCallback(Cell);
+                return bInvertResult ? !bResult : bResult;
+            };
+    }
+    else
+    {
+        Traits.FilterCallback =
+            [FeatureId,bInvertResult](const FJCVCell& Cell)
+            {
+                bool bResult = Cell.IsType(FeatureId.Type, FeatureId.Index);
+                return bInvertResult ? !bResult : bResult;
+            };
+    }
+}
+
+void UJCVTraitsLibrary::CreateValueTraits(
+    FJCVCellTraits& Traits,
+    float ValueLo,
+    float ValueHi,
+    bool bInvertResult,
+    const FJCVCellTraits::FFilterCallback* SubCallbackRef
+    )
+{
+    bool bIsSubCallbackValid = SubCallbackRef && !!(*SubCallbackRef);
+    if (bIsSubCallbackValid)
+    {
+        FJCVCellTraits::FFilterCallback SubCallback(*SubCallbackRef);
+        Traits.FilterCallback =
+            [SubCallback,ValueLo,ValueHi,bInvertResult](const FJCVCell& Cell)
+            {
+                bool bResult;
+                bResult = Cell.Value >= ValueLo && Cell.Value <= ValueHi;
+                bResult = bResult && SubCallback(Cell);
+                return bInvertResult ? !bResult : bResult;
+            };
+    }
+    else
+    {
+        Traits.FilterCallback =
+            [ValueLo,ValueHi,bInvertResult](const FJCVCell& Cell)
+            {
+                bool bResult = Cell.Value >= ValueLo && Cell.Value <= ValueHi;
+                return bInvertResult ? !bResult : bResult;
+            };
     }
 }

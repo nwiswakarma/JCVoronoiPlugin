@@ -27,7 +27,11 @@
 
 #include "JCVFeatureUtility.h"
 
-void FJCVFeatureUtility::PointFillVisit(FJCVDiagramMap& Map, const TArray<FJCVCell*>& OriginCells, const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback)
+void FJCVFeatureUtility::PointFillVisit(
+    FJCVDiagramMap& Map,
+    const TArray<FJCVCell*>& OriginCells,
+    const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
+    )
 {
     if (Map.IsEmpty() || OriginCells.Num() < 1)
     {
@@ -36,8 +40,6 @@ void FJCVFeatureUtility::PointFillVisit(FJCVDiagramMap& Map, const TArray<FJCVCe
 
     TQueue<FJCVCell*> CellVisitQueue;
     TSet<FJCVCell*> VisitedCellSet;
-
-    VisitedCellSet.Reserve(Map.Num());
 
     // Visit starting cells, filter invalid and duplicate cells
     for (FJCVCell* c : OriginCells)
@@ -86,6 +88,73 @@ void FJCVFeatureUtility::PointFillVisit(FJCVDiagramMap& Map, const TArray<FJCVCe
     }
 }
 
+void FJCVFeatureUtility::ExpandVisit(
+    FJCVDiagramMap& Map,
+    int32 ExpandCount,
+    const TArray<FJCVCell*>& OriginCells,
+    const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
+    )
+{
+    if (Map.IsEmpty() || OriginCells.Num() < 1)
+    {
+        return;
+    }
+
+    TSet<FJCVCell*> VisitedCellSet;
+    TArray<FJCVCell*> CellVisitList;
+    TArray<FJCVCell*> CellVisitNextList;
+
+    // Visit starting cells, filter invalid and duplicate cells
+    for (FJCVCell* c : OriginCells)
+    {
+        if (c && ! VisitedCellSet.Contains(c))
+        {
+            CellVisitList.Emplace(c);
+            VisitedCellSet.Emplace(c);
+        }
+    }
+
+    for (int32 It=0; It<ExpandCount; ++It)
+    {
+        // Visit cells in list
+        for (int32 i=0; i<CellVisitList.Num(); ++i)
+        {
+            FJCVCell* Cell = CellVisitList[i];
+
+            check(Cell != nullptr);
+
+            FJCVEdge* g = Cell->GetEdge();
+            check(g);
+
+            do
+            {
+                FJCVCell* NeighbourCell = Map.GetCellNeighbour(g);
+
+                //  Invalid neighbour or already visited cell, skip
+                if (! NeighbourCell || VisitedCellSet.Contains(NeighbourCell))
+                {
+                    continue;
+                }
+
+                // Add cell to the visited set
+                VisitedCellSet.Emplace(NeighbourCell);
+
+                // Call visit callback
+                bool bEnqueueCellVisit = VisitCallback(*Cell, *NeighbourCell);
+
+                // If visit callback return true, enqueue current neighbouring cell
+                if (bEnqueueCellVisit)
+                {
+                    CellVisitNextList.Emplace(NeighbourCell);
+                }
+            }
+            while ((g = g->next) != nullptr);
+        }
+
+        CellVisitList = MoveTemp(CellVisitNextList);
+    }
+}
+
 void FJCVFeatureUtility::PointFill(FJCVDiagramMap& Map, const TArray<FJCVCell*>& OriginCells, uint8 FeatureTypeFilter)
 {
     TFunctionRef<bool(FJCVCell&,FJCVCell&)> VisitCallback(
@@ -123,6 +192,23 @@ void FJCVFeatureUtility::PointFillIsolated(
         } );
 
     PointFillVisit(Map, OriginCells, VisitCallback);
+}
+
+void FJCVFeatureUtility::ExpandFeatureFromCellGroups(
+    FJCVDiagramMap& Map,
+    const TArray<FJCVCell*>& OriginCells,
+    const FJCVFeatureId& FeatureId,
+    int32 ExpandCount
+    )
+{
+    TFunctionRef<bool(FJCVCell&,FJCVCell&)> VisitCallback(
+        [FeatureId](FJCVCell& CurrentCell, FJCVCell& NeighbourCell)
+        {
+            NeighbourCell.SetType(FeatureId.Type, FeatureId.Index);
+            return true;
+        } );
+
+    ExpandVisit(Map, ExpandCount, OriginCells, VisitCallback);
 }
 
 void FJCVFeatureUtility::GenerateSegmentExpands(
@@ -416,7 +502,7 @@ void FJCVFeatureUtility::PointFillSubdivideFeatures(
 
 void FJCVFeatureUtility::GetRandomCellWithinFeature(
     FJCVCellGroup& OutCells,
-    const FJCVDiagramMap& Map,
+    FJCVDiagramMap& Map,
     uint8 FeatureType,
     int32 CellCount,
     FRandomStream& Rand,

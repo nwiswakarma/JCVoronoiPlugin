@@ -28,47 +28,47 @@
 #include "JCVValueGenerator.h"
 #include "JCVDiagramAccessor.h"
 
-int32 FJCVValueGenerator::MarkFeature(FJCVDiagramMap& Map, TQueue<FJCVCell*>& cellQ, TSet<FJCVCell*>& ExclusionSet, FJCVCell& c, int32 i, const FJCVCellTraits& cond)
-{
-    int32 count = 0;
-
-    cellQ.Enqueue(&c);
-    ExclusionSet.Emplace(&c);
-
-    while (! cellQ.IsEmpty())
-    {
-        FJCVCell* cell;
-        cellQ.Dequeue(cell);
-
-        FJCVEdge* g = cell->GetEdge();
-        check(g);
-
-        if (cond.HasValidFeature(*cell))
-        {
-            cell->SetType(cond.FeatureType, i);
-            ++count;
-        }
-        else
-            continue;
-
-        do
-        {
-            FJCVCell* n = Map.GetCellNeighbour(g);
-
-            if (! n) continue;
-            if (ExclusionSet.Contains(n)) continue;
-
-            if (cond.HasValidFeature(*n))
-            {
-                ExclusionSet.Emplace(n);
-                cellQ.Enqueue(n);
-            }
-        }
-        while ((g = g->next) != nullptr);
-    }
-
-    return count;
-}
+//int32 FJCVValueGenerator::MarkFeature(FJCVDiagramMap& Map, TQueue<FJCVCell*>& cellQ, TSet<FJCVCell*>& ExclusionSet, FJCVCell& c, int32 i, const FJCVCellTraits_Deprecated& cond)
+//{
+//    int32 count = 0;
+//
+//    cellQ.Enqueue(&c);
+//    ExclusionSet.Emplace(&c);
+//
+//    while (! cellQ.IsEmpty())
+//    {
+//        FJCVCell* cell;
+//        cellQ.Dequeue(cell);
+//
+//        FJCVEdge* g = cell->GetEdge();
+//        check(g);
+//
+//        if (cond.HasValidFeature(*cell))
+//        {
+//            cell->SetType(cond.FeatureType, i);
+//            ++count;
+//        }
+//        else
+//            continue;
+//
+//        do
+//        {
+//            FJCVCell* n = Map.GetCellNeighbour(g);
+//
+//            if (! n) continue;
+//            if (ExclusionSet.Contains(n)) continue;
+//
+//            if (cond.HasValidFeature(*n))
+//            {
+//                ExclusionSet.Emplace(n);
+//                cellQ.Enqueue(n);
+//            }
+//        }
+//        while ((g = g->next) != nullptr);
+//    }
+//
+//    return count;
+//}
 
 void FJCVValueGenerator::AddRadialFill0(FJCVDiagramMap& Map, FRandomStream& Rand, FJCVCell& OriginCell, const FJCVRadialFill& FillParams)
 {
@@ -236,52 +236,52 @@ void FJCVValueGenerator::AddRadialFill(FJCVDiagramMap& Map, FRandomStream& Rand,
     }
 }
 
-void FJCVValueGenerator::MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits& Cond, FJCVCellSet& ExclusionSet)
-{
-    if (Map.IsEmpty())
-    {
-        return;
-    }
+//void FJCVValueGenerator::MarkFeatures(FJCVDiagramMap& Map, const FJCVCellTraits_Deprecated& Cond, FJCVCellSet& ExclusionSet)
+//{
+//    if (Map.IsEmpty())
+//    {
+//        return;
+//    }
+//
+//    TQueue<FJCVCell*> cellQ;
+//
+//    const int32 cellN = Map.Num();
+//    int32 f = 0;
+//    int32 n;
+//
+//    do
+//    {
+//        FJCVCell* c = nullptr;
+//        n = 0;
+//
+//        // Find single unmarked cell
+//        for (int32 i=0; i<cellN; ++i)
+//            if (Cond.HasUndefinedType(Map.GetCell(i)))
+//                c = &Map.GetCell(i);
+//
+//        if (c)
+//            n = MarkFeature(Map, cellQ, ExclusionSet, *c, f++, Cond);
+//    }
+//    // Loop until there is no undefined cell left or no conversion made
+//    while (n > 0);
+//}
 
-    TQueue<FJCVCell*> cellQ;
-
-    const int32 cellN = Map.Num();
-    int32 f = 0;
-    int32 n;
-
-    do
-    {
-        FJCVCell* c = nullptr;
-        n = 0;
-
-        // Find single unmarked cell
-        for (int32 i=0; i<cellN; ++i)
-            if (Cond.HasUndefinedType(Map.GetCell(i)))
-                c = &Map.GetCell(i);
-
-        if (c)
-            n = MarkFeature(Map, cellQ, ExclusionSet, *c, f++, Cond);
-    }
-    // Loop until there is no undefined cell left or no conversion made
-    while (n > 0);
-}
-
-void FJCVValueGenerator::MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet)
-{
-    if (Map.IsEmpty())
-    {
-        return;
-    }
-
-    const FJCVSite* s = &Seed;
-    FJCVCell* c = Map.GetCell(s);
-
-    if (c)
-    {
-        TQueue<FJCVCell*> cellQ;
-        MarkFeature(Map, cellQ, ExclusionSet, *c, FeatureIndex, Cond);
-    }
-}
+//void FJCVValueGenerator::MarkFeatures(FJCVDiagramMap& Map, const FJCVSite& Seed, const FJCVCellTraits_Deprecated& Cond, int32 FeatureIndex, FJCVCellSet& ExclusionSet)
+//{
+//    if (Map.IsEmpty())
+//    {
+//        return;
+//    }
+//
+//    const FJCVSite* s = &Seed;
+//    FJCVCell* c = Map.GetCell(s);
+//
+//    if (c)
+//    {
+//        TQueue<FJCVCell*> cellQ;
+//        MarkFeature(Map, cellQ, ExclusionSet, *c, FeatureIndex, Cond);
+//    }
+//}
 
 float FJCVValueGenerator::GetClosestDistanceFromCellSq(
     FJCVDiagramMap& Map,
