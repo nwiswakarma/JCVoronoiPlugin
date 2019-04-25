@@ -516,7 +516,7 @@ void UJCVValueUtilityLibrary::AddRadialFillNum(UJCVDiagramAccessor* Accessor, in
 
     Padding = FMath::Clamp(Padding, 0.f, 1.f);
 
-    FBox2D Bounds(Accessor->GetBounds());
+    FBox2D Bounds(Map.GetBounds());
     FBox2D BoundsExpand(Bounds.Min*Padding, Bounds.Max*(1.f-Padding));
 
     for (int32 it=0; it<PointCount; ++it)

@@ -265,11 +265,11 @@ struct FJCVEdgeNode
 struct FJCVCellJunction
 {
     FVector2D Point;
-    FJCVConstCellGroup Cells;
+    FJCVCellGroup Cells;
 
     FJCVCellJunction() = default;
 
-    FJCVCellJunction(const FVector2D& InPoint, const FJCVConstCellGroup& InCells)
+    FJCVCellJunction(const FVector2D& InPoint, const FJCVCellGroup& InCells)
         : Point(InPoint)
         , Cells(InCells)
     {
@@ -790,10 +790,7 @@ public:
 
     // -- FEATURE QUERY OPERATIONS (JUNCTIONS)
 
-    void GetJunctionCells(
-        const FJCVCell& c,
-        TArray<FJCVCellJunction>& Junctions
-        ) const;
+    void GetJunctionCells(FJCVCell& c, TArray<FJCVCellJunction>& Junctions);
 
     // -- CELL QUERY OPERATIONS (CONST)
 

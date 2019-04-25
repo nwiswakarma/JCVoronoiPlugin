@@ -554,9 +554,11 @@ void FJCVFeatureUtility::GetRandomCellWithinFeature(
             {
                 bValidCell = false;
             }
-            // If border cell is not allowed, check whether current cell
-            // is a feature border (Adjacent to another cell with different
+            // Check whether current cell is a feature border
+            // (Adjacent to another cell with different
             // feature type and is not diagram border cell)
+            //
+            // Mark cell as invalid if feature border cell is being filtered
             else if (! bAllowBorder && Map.IsFeatureBorder(*RandCell, true))
             {
                 bValidCell = false;
@@ -571,7 +573,7 @@ void FJCVFeatureUtility::GetRandomCellWithinFeature(
         }
 
         // If minimum distance between cell is specified,
-        // mark neighbouring cells as visited to prevent 
+        // mark neighbouring cells as visited to prevent duplicates
         if (MinCellDistance > 0)
         {
             TQueue<const FJCVCell*> CellQueue;

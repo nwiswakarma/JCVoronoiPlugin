@@ -669,12 +669,12 @@ void FJCVDiagramMap::GenerateSortedBorderEdges(
 
 // -- FEATURE QUERY OPERATIONS (JUNCTIONS)
 
-void FJCVDiagramMap::GetJunctionCells(const FJCVCell& c, TArray<FJCVCellJunction>& Junctions) const
+void FJCVDiagramMap::GetJunctionCells(FJCVCell& c, TArray<FJCVCellJunction>& Junctions)
 {
     const uint8 t = c.FeatureType;
 
-    const FJCVCell* n0 = nullptr;
-    const FJCVCell* n1 = nullptr;
+    FJCVCell* n0 = nullptr;
+    FJCVCell* n1 = nullptr;
 
     const FJCVEdge* g0 = nullptr;
     const FJCVEdge* g1 = c.GetEdge();
@@ -694,7 +694,7 @@ void FJCVDiagramMap::GetJunctionCells(const FJCVCell& c, TArray<FJCVCellJunction
                     FVector2D Point = conn0 > -1
                         ? FJCVMathUtil::ToVector2D(g0->pos[1])
                         : FJCVMathUtil::ToVector2D(g0->pos[0]);
-                    Junctions.Emplace(Point, FJCVConstCellGroup({&c, n0, n1}));
+                    Junctions.Emplace(Point, FJCVCellGroup({&c, n0, n1}));
                 }
             }
 
@@ -727,7 +727,7 @@ void FJCVDiagramMap::GetJunctionCells(const FJCVCell& c, TArray<FJCVCellJunction
                 FVector2D Point = conn0 > -1
                     ? FJCVMathUtil::ToVector2D(g0->pos[1])
                     : FJCVMathUtil::ToVector2D(g0->pos[0]);
-                Junctions.Emplace(Point, FJCVConstCellGroup({&c, n0, n1}));
+                Junctions.Emplace(Point, FJCVCellGroup({&c, n0, n1}));
             }
         }
     }

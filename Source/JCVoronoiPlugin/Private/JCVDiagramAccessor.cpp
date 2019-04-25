@@ -26,11 +26,46 @@
 // 
 
 #include "JCVDiagramAccessor.h"
+#include "JCVDiagramMap.h"
 #include "JCVFeatureUtility.h"
 #include "JCVValueGenerator.h"
 #include "JCVPlateGenerator.h"
 
 #include "Poly/GULPolyUtilityLibrary.h"
+
+void UJCVDiagramAccessor::SetMap(FJCVDiagramMap& AccessedMap, int32 InContextId, int32 InMapId)
+{
+    Map = &AccessedMap;
+    ContextId = InContextId;
+    MapId = InMapId;
+}
+
+FBox2D UJCVDiagramAccessor::K2_GetBounds() const
+{
+    return HasValidMap() ? Map->GetBounds() : FBox2D();
+}
+
+int32 UJCVDiagramAccessor::GetCellIndex(const FJCVCellRef& CellRef) const
+{
+    if (HasValidMap() && CellRef.Data)
+    {
+        return Map->GetCellIndex(CellRef.Data);
+    }
+
+    return -1;
+}
+
+FJCVCellRef UJCVDiagramAccessor::GetCellRef(int32 CellIndex)
+{
+    return (Map && Map->IsValidIndex(CellIndex))
+        ? FJCVCellRef(&Map->GetCell(CellIndex))
+        : FJCVCellRef();
+}
+
+bool UJCVDiagramAccessor::IsValidCell(const FJCVCellRef& CellRef) const
+{
+    return (GetCellIndex(CellRef) >= 0);
+}
 
 void UJCVDiagramAccessor::GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCell*>& Cells) const
 {
@@ -744,21 +779,18 @@ void UJCVDiagramAccessor::MapNormalizedDistanceFromCell(FJCVCellRef OriginCellRe
     FJCVValueGenerator::MapNormalizedDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, bAgainstAnyType);
 }
 
-FJCVPointGroup UJCVDiagramAccessor::GetFeaturePoints(FJCVFeatureId FeatureId)
+void UJCVDiagramAccessor::GetFeaturePoints(TArray<FVector2D>& Points, FJCVFeatureId FeatureId)
 {
-    FJCVPointGroup PointGroup;
-
     if (! HasValidMap())
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeaturePoints() ABORTED, INVALID MAP"));
-        return PointGroup;
+        return;
     }
 
     const FJCVCellGroup* CellGroupPtr = Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index);
 
     if (CellGroupPtr)
     {
-        TArray<FVector2D>& Points(PointGroup.Points);
         const FJCVCellGroup& CellGroup(*CellGroupPtr);
 
         Points.Reserve(CellGroup.Num());
@@ -771,18 +803,14 @@ FJCVPointGroup UJCVDiagramAccessor::GetFeaturePoints(FJCVFeatureId FeatureId)
             }
         }
     }
-
-    return PointGroup;
 }
 
-FJCVCellRefGroup UJCVDiagramAccessor::GetFeatureCells(FJCVFeatureId FeatureId)
+void UJCVDiagramAccessor::GetFeatureCells(TArray<FJCVCellRef>& CellRefs, FJCVFeatureId FeatureId)
 {
-    FJCVCellRefGroup OutCellGroup;
-
     if (! HasValidMap())
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeatureCells() ABORTED, INVALID MAP"));
-        return OutCellGroup;
+        return;
     }
 
     const FJCVFeatureGroup* FeatureGroupPtr = Map->GetFeatureGroup(FeatureId.Type);
@@ -800,7 +828,7 @@ FJCVCellRefGroup UJCVDiagramAccessor::GetFeatureCells(FJCVFeatureId FeatureId)
             CellCount += FeatureGroupPtr->GetCellCount(fi);
         }
 
-        OutCellGroup.Data.Reserve(CellCount);
+        CellRefs.Reserve(CellCount);
 
         for (const int32 fi : FeatureIndices)
         {
@@ -809,48 +837,10 @@ FJCVCellRefGroup UJCVDiagramAccessor::GetFeatureCells(FJCVFeatureId FeatureId)
             for (const FJCVCell* Cell : CellGroup)
             {
                 check(Cell != nullptr);
-                OutCellGroup.Data.Emplace(Cell);
+                CellRefs.Emplace(Cell);
             }
         }
     }
-
-    return OutCellGroup;
-}
-
-TArray<int32> UJCVDiagramAccessor::GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders, int32 MinCellDistance)
-{
-    TArray<int32> OutIndices;
-
-    if (! HasValidMap())
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellWithinFeature() ABORTED, INVALID MAP"));
-        return OutIndices;
-    }
-
-    FJCVCellGroup Cells;
-    FRandomStream Rand(Seed);
-
-    FJCVFeatureUtility::GetRandomCellWithinFeature(
-        Cells,
-        *Map,
-        FeatureType,
-        CellCount,
-        Rand,
-        bAllowBorders,
-        MinCellDistance
-        );
-
-    OutIndices.Reserve(Cells.Num());
-
-    for (const FJCVCell* c : Cells)
-    {
-        if (c)
-        {
-            OutIndices.Emplace(c->GetIndex());
-        }
-    }
-
-    return OutIndices;
 }
 
 // CELL QUERY FUNCTIONS
@@ -923,54 +913,19 @@ void UJCVDiagramAccessor::GetCellPositions(const TArray<FJCVCellRef>& CellRefs, 
     }
 }
 
-void UJCVDiagramAccessor::GetCellWithinPolyFromCellGroup(
-    const TArray<FJCVCellRef>& CellRefs,
-    const TArray<FVector2D>& Points,
-    const FJCVCellTraits& FilterTraits,
-    FJCVCellRef& OutCellRef
-    )
+void UJCVDiagramAccessor::GetNeighbourTypes(TArray<uint8>& Types, const FJCVCellRef& CellRef)
 {
-    if (! HasValidMap())
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetNeighbourCells() ABORTED, INVALID MAP"));
-        return;
-    }
-
-    for (const FJCVCellRef& CellRef : CellRefs)
-    {
-        const FJCVCell* Cell = CellRef.Data;
-
-        if (Map->IsValidCell(Cell) && FilterTraits.HasMatchingTraits(Cell))
-        {
-            const FVector2D CellPos(Cell->ToVector2DUnsafe());
-
-            if (UGULPolyUtilityLibrary::IsPointInPoly(CellPos, Points))
-            {
-                OutCellRef = CellRef;
-                break;
-            }
-        }
-    }
-}
-
-TArray<uint8> UJCVDiagramAccessor::GetNeighbourTypes(const FJCVCellRef& CellRef)
-{
-    TArray<uint8> Types;
-
     if (HasValidMap() && CellRef.Data)
     {
         Map->GetNeighbourTypes(*CellRef.Data, Types);
     }
-
-    return Types;
 }
 
-TArray<FJCVCellTypeGroupRef> UJCVDiagramAccessor::GetGroupNeighbourTypes(const FJCVCellRefGroup& CellGroup)
+void UJCVDiagramAccessor::GetCellGroupNeighbourTypes(TArray<FJCVCellTypeGroupRef>& TypeGroups, const FJCVCellRefGroup& CellGroup)
 {
     const TArray<FJCVCellRef>& Cells(CellGroup.Data);
 
-    TArray<FJCVCellTypeGroupRef> TypeGroup;
-    TypeGroup.SetNum(Cells.Num());
+    TypeGroups.SetNum(Cells.Num());
 
     if (HasValidMap())
     {
@@ -978,34 +933,30 @@ TArray<FJCVCellTypeGroupRef> UJCVDiagramAccessor::GetGroupNeighbourTypes(const F
         {
             if (const FJCVCell* Cell = Cells[i].Data)
             {
-                TArray<uint8>& Types(TypeGroup[i].Data);
+                TArray<uint8>& Types(TypeGroups[i].Data);
                 Map->GetNeighbourTypes(*Cell, Types);
             }
         }
     }
-
-    return TypeGroup;
 }
 
-TArray<int32> UJCVDiagramAccessor::GetCellRange(const FVector2D& StartPosition, const FVector2D& EndPosition)
+void UJCVDiagramAccessor::GetCellRange(TArray<FJCVCellRef>& CellRefs, const FVector2D& StartPosition, const FVector2D& EndPosition)
 {
-    TArray<int32> OutIndices;
-
     if (! HasValidMap())
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID MAP"));
-        return OutIndices;
+        return;
     }
 
     FJCVDiagramMap& MapRef(*Map);
-    const FBox2D& Bounds(GetBounds());
+    const FBox2D& Bounds(MapRef.GetBounds());
     const FVector2D& v0(StartPosition);
     const FVector2D& v1(EndPosition);
 
     if (! Bounds.IsInside(v0) || ! Bounds.IsInside(v1))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellRange() ABORTED, INVALID INPUT POSITIONS"));
-        return OutIndices;
+        return;
     }
 
     const FJCVSite* s0 = MapRef->Find(v0);
@@ -1016,49 +967,185 @@ TArray<int32> UJCVDiagramAccessor::GetCellRange(const FVector2D& StartPosition, 
         const int32 ReserveSize = MapRef.Num()/4;
 
         Sites.Reserve(ReserveSize);
-        OutIndices.Reserve(ReserveSize);
+        CellRefs.Reserve(ReserveSize);
 
         MapRef->FindAllTo(v1, *s0, Sites);
 
         for (const FJCVSite* site : Sites)
         {
-            OutIndices.Emplace( MapRef.GetCell(site)->GetIndex() );
+            CellRefs.Emplace(MapRef.GetCell(site));
         }
 
-        OutIndices.Shrink();
+        CellRefs.Shrink();
     }
-
-    return MoveTemp(OutIndices);
 }
 
-FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVFeatureId& FeatureId)
+FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVCellTraits& Traits)
 {
-    TArray<int32> CellIndices;
-    //TArray<FJCVCellRef> OutCells;
-    FJCVCellRef CellRef;
-
-    //GetRandomCells(OutCells, Seed, FeatureId, 1);
-
     if (! HasValidMap())
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCell() ABORTED, INVALID MAP"));
+        return FJCVCellRef();
+    }
+
+    if (Map->Num() > 0)
+    {
+        return FJCVCellRef();
+    }
+
+    FRandomStream Rand(Seed);
+    const int32 MaxCellCount = Map->Num();
+
+    if (Traits.HasValidCallback())
+    {
+        FJCVCell* RandomCell = nullptr;
+
+        // Random cell search with valid traits requires max traits check iteration
+        int32 TraitsCheckIt = 0;
+        for (; TraitsCheckIt<JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION; ++TraitsCheckIt)
+        {
+            FJCVCell& Cell(Map->GetCell(Rand.RandHelper(MaxCellCount)));
+
+            if (Traits.HasMatchingTraits(Cell))
+            {
+                RandomCell = &Cell;
+                break;
+            }
+        }
+#if JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION_DETECTION
+        ensureMsgf(
+            (TraitsCheckIt < JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO),
+            TEXT("UJCVDiagramAccessor::GetRandomCell() JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO TRAITS CHECK HIT!")
+            );
+#endif
+
+        return FJCVCellRef(RandomCell);
+    }
+    else
+    {
+        return FJCVCellRef(Map->GetCell(Rand.RandHelper(MaxCellCount)));
+    }
+}
+
+FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits)
+{
+    FJCVCellRef CellRef;
+
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellByFeature() ABORTED, INVALID MAP"));
         return CellRef;
     }
 
-    const FJCVCellGroup* CellGroupPtr = Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index);
+    FRandomStream Rand(Seed);
+    const FJCVFeatureGroup* FeatureGroupPtr = Map->GetFeatureGroup(FeatureId.Type);
 
-    if (CellGroupPtr)
+    if (FeatureGroupPtr)
     {
-        const FJCVCellGroup& CellGroup(*CellGroupPtr);
-        FRandomStream Rand(Seed);
+        const FJCVFeatureGroup& FeatureGroup(*FeatureGroupPtr);
 
-        CellRef = FJCVCellRef(CellGroup[Rand.RandHelper(CellGroup.Num())]);
+        // Find random cells without specified feature index
+        if (FeatureId.Index < 0)
+        {
+            const TArray<FJCVCellGroup>& CellGroups(FeatureGroup.CellGroups);
+            const int32 CellGroupCount = CellGroups.Num();
+            TArray<int32> NonEmptyCellGroups;
+
+            for (int32 i=0; i<CellGroupCount; ++i)
+            {
+                if (FeatureGroup.GetCellCount(i) > 0)
+                {
+                    NonEmptyCellGroups.Emplace(i);
+                }
+            }
+
+            if (NonEmptyCellGroups.Num() > 0)
+            {
+                if (Traits.HasValidCallback())
+                {
+                    // Random cell search with valid traits requires max traits check iteration
+                    int32 TraitsCheckIt = 0;
+                    for (; TraitsCheckIt<JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION; ++TraitsCheckIt)
+                    {
+                        int32 CellGroupIndex = Rand.RandHelper(NonEmptyCellGroups.Num());
+                        const FJCVCellGroup& CellGroup = CellGroups[NonEmptyCellGroups[CellGroupIndex]];
+
+                        int32 CellIndex = Rand.RandHelper(CellGroup.Num());
+                        FJCVCell* Cell(CellGroup[CellIndex]);
+
+                        if (Traits.HasMatchingTraits(*Cell))
+                        {
+                            CellRef = FJCVCellRef(*Cell);
+                            break;
+                        }
+                    }
+#if JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION_DETECTION
+                    ensureMsgf(
+                        (TraitsCheckIt < JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO),
+                        TEXT("UJCVDiagramAccessor::GetRandomCellByFeature() JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO TRAITS CHECK HIT!")
+                        );
+#endif
+                }
+                else
+                {
+                    int32 CellGroupIndex = Rand.RandHelper(NonEmptyCellGroups.Num());
+                    const FJCVCellGroup& CellGroup = CellGroups[NonEmptyCellGroups[CellGroupIndex]];
+                    int32 CellIndex = Rand.RandHelper(CellGroup.Num());
+                    CellRef = FJCVCellRef(CellGroup[CellIndex]);
+                }
+            }
+        }
+        // Find random cells with specified feature index
+        else
+        if (FeatureGroup.CellGroups.IsValidIndex(FeatureId.Index))
+        {
+            const FJCVCellGroup& CellGroup = FeatureGroup.CellGroups[FeatureId.Index];
+
+            if (Traits.HasValidCallback())
+            {
+                // Random cell search with valid traits requires max traits check iteration
+                int32 TraitsCheckIt = 0;
+                for (; TraitsCheckIt<JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION; ++TraitsCheckIt)
+                {
+                    int32 CellIndex = Rand.RandHelper(CellGroup.Num());
+                    FJCVCell* Cell(CellGroup[CellIndex]);
+
+                    if (Traits.HasMatchingTraits(*Cell))
+                    {
+                        CellRef = FJCVCellRef(*Cell);
+                        break;
+                    }
+                }
+#if JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION_DETECTION
+                ensureMsgf(
+                    (TraitsCheckIt < JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO),
+                    TEXT("UJCVDiagramAccessor::GetRandomCellByFeature() JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO TRAITS CHECK HIT!")
+                    );
+#endif
+            }
+            else
+            {
+                int32 CellIndex = Rand.RandHelper(CellGroup.Num());
+                CellRef = FJCVCellRef(CellGroup[CellIndex]);
+            }
+        }
+        // Invalid feature index
+        else
+        {
+            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellsByFeature() ABORTED, INVALID FEATURE INDEX"));
+            return CellRef;
+        }
+    }
+    else
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellsByFeature() ABORTED, INVALID FEATURE TYPE"));
+        return CellRef;
     }
 
     return CellRef;
 }
 
-void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& Cells, int32 Seed, const FJCVFeatureId& FeatureId, int32 Count)
+void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVCellTraits& Traits, int32 Count)
 {
     if (! HasValidMap())
     {
@@ -1070,292 +1157,362 @@ void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& Cells, int32 Seed,
         return;
     }
 
-    const uint8 FeatureType = FeatureId.Type;
-    const int32 FeatureIndex = FeatureId.Index;
-
-    FJCVDiagramMap& MapRef(*Map);
     FRandomStream Rand(Seed);
-    TSet<int32> IndexSet;
 
-    if (FeatureType < 255)
+    // Find random cell
+
+    const int32 MaxCellCount = Map->Num();
+    const int32 CellCount = FMath::Clamp(Count, 0, MaxCellCount);
+    const int32 CopyCellThreshold = MaxCellCount / JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO;
+
+    CellRefs.Reset(CellCount);
+
+    if (CellCount < CopyCellThreshold)
     {
-        const FJCVFeatureGroup* FeatureGroupPtr = MapRef.GetFeatureGroup(FeatureType);
+        TSet<int32> IndexSet;
+        IndexSet.Reserve(CellCount);
 
-        if (FeatureGroupPtr)
+        while (CellRefs.Num() < CellCount)
         {
-            const FJCVFeatureGroup& FeatureGroup(*FeatureGroupPtr);
-
-            // Find random cells with feature index wildcard
-            if (FeatureIndex < 0)
+            if (Traits.HasValidCallback())
             {
-                const TArray<FJCVCellGroup>& CellGroups(FeatureGroup.CellGroups);
-                const int32 FeatureCellCount = FeatureGroup.GetCellCount();
-                const int32 CellN = FMath::Clamp(Count, 0, FeatureCellCount);
+                // Random cell search with valid traits requires max traits check iteration
+                int32 TraitsCheckIt = 0;
+                for (; TraitsCheckIt<JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION; ++TraitsCheckIt)
+                {
+                    int32 CellIndex = Rand.RandHelper(MaxCellCount);
 
-                TArray<int32> FeatureCellIndices;
-                FeatureCellIndices.Reserve(FeatureCellCount);
+                    if (! IndexSet.Contains(CellIndex))
+                    {
+                        FJCVCell& Cell(Map->GetCell(CellIndex));
+
+                        if (Traits.HasMatchingTraits(Cell))
+                        {
+                            CellRefs.Emplace(Cell);
+                            IndexSet.Emplace(CellIndex);
+                            break;
+                        }
+                    }
+                }
+#if JCV_RANDOM_CELL_TRAITS_CHECK_MAX_ITERATION_DETECTION
+                ensureMsgf(
+                    (TraitsCheckIt < JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO),
+                    TEXT("UJCVDiagramAccessor::GetRandomCells() JCV_RANDOM_CELL_COPY_THRESHOLD_RATIO TRAITS CHECK HIT!")
+                    );
+#endif
+            }
+            else
+            {
+                int32 CellIndex = Rand.RandHelper(MaxCellCount);
+
+                if (! IndexSet.Contains(CellIndex))
+                {
+                    CellRefs.Emplace(Map->GetCell(CellIndex));
+                    IndexSet.Emplace(CellIndex);
+                }
+            }
+        }
+    }
+    else
+    {
+        TArray<int32> CellIndices;
+        CellIndices.Reserve(MaxCellCount);
+
+        for (int32 i=0; i<MaxCellCount; ++i)
+        {
+            CellIndices.Emplace(i);
+        }
+
+        while (CellRefs.Num() < CellCount && CellIndices.Num() > 0)
+        {
+            int32 CellIndex = Rand.RandHelper(CellIndices.Num());
+            FJCVCell& Cell(Map->GetCell(CellIndex));
+
+            CellIndices.RemoveAtSwap(CellIndex, 1, false);
+
+            if (Traits.HasMatchingTraits(Cell))
+            {
+                CellRefs.Emplace(Cell);
+            }
+        }
+    }
+}
+
+void UJCVDiagramAccessor::GetRandomCellsByFeature(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits, int32 Count)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellsByFeature() ABORTED, INVALID MAP"));
+        return;
+    }
+
+    if (Count <= 0)
+    {
+        return;
+    }
+
+    FRandomStream Rand(Seed);
+    const FJCVFeatureGroup* FeatureGroupPtr = Map->GetFeatureGroup(FeatureId.Type);
+
+    if (FeatureGroupPtr)
+    {
+        const FJCVFeatureGroup& FeatureGroup(*FeatureGroupPtr);
+
+        // Find random cells without specified feature index
+        if (FeatureId.Index < 0)
+        {
+            const TArray<FJCVCellGroup>& CellGroups(FeatureGroup.CellGroups);
+            const int32 FeatureCellCount = FeatureGroup.GetCellCount();
+            const int32 CellCount = FMath::Clamp(Count, 0, FeatureCellCount);
+
+            CellRefs.Reserve(CellCount);
+
+            // Feature cell count equals specified output count, copy feature cells
+            if (CellCount == FeatureCellCount)
+            {
+                for (const FJCVCellGroup& CellGroup : CellGroups)
+                {
+                    for (FJCVCell* Cell : CellGroup)
+                    {
+                        if (Traits.HasMatchingTraits(*Cell))
+                        {
+                            CellRefs.Emplace(Cell);
+                        }
+                    }
+                }
+            }
+            // Randomly assign cell from feature cells
+            else
+            {
+                // Generate feature cell copy. Random cell will be fetch
+                // from the container to avoid duplicates.
+
+                TArray<FJCVCell*> FeatureCells;
+                FeatureCells.Reserve(FeatureCellCount);
 
                 for (const FJCVCellGroup& CellGroup : CellGroups)
                 {
-                    for (const FJCVCell* Cell : CellGroup)
+                    FeatureCells.Append(CellGroup);
+                }
+
+                while (CellRefs.Num() < CellCount && FeatureCells.Num() > 0)
+                {
+                    int32 CellIndex = Rand.RandHelper(FeatureCells.Num());
+                    FJCVCell* Cell(FeatureCells[CellIndex]);
+
+                    FeatureCells.RemoveAtSwap(CellIndex, 1, false);
+
+                    if (Traits.HasMatchingTraits(*Cell))
                     {
-                        check(Cell != nullptr);
-                        FeatureCellIndices.Emplace(Cell->GetIndex());
+                        CellRefs.Emplace(Cell);
                     }
                 }
-
-                // Feature cell count equals specified random cell count,
-                // simple assign cell indices to index set
-                if (CellN == FeatureCellCount)
-                {
-                    IndexSet = TSet<int32>(FeatureCellIndices);
-                }
-                // Randomly assign cell from feature cell indices
-                else
-                {
-                    IndexSet.Reserve(CellN);
-
-                    for (int32 i=0; i<CellN; ++i)
-                    {
-                        int32 CellIndex = Rand.RandHelper(FeatureCellIndices.Num());
-                        IndexSet.Emplace(FeatureCellIndices[CellIndex]);
-                        FeatureCellIndices.RemoveAtSwap(CellIndex, 1, false);
-                    }
-                }
-            }
-            // Find random cells with specified feature index
-            else
-            if (FeatureGroup.CellGroups.IsValidIndex(FeatureIndex))
-            {
-                const FJCVCellGroup& CellGroup(FeatureGroup.CellGroups[FeatureIndex]);
-                const int32 CellCount = CellGroup.Num();
-                const int32 CellN = FMath::Clamp(Count, 0, CellCount);
-
-                TArray<int32> CellIndices;
-                CellIndices.Reserve(CellCount);
-
-                for (const FJCVCell* Cell : CellGroup)
-                {
-                    check(Cell != nullptr);
-                    CellIndices.Emplace(Cell->GetIndex());
-                }
-
-                // Cell count equals specified random cell count,
-                // simple assign cell indices to index set
-                if (CellN == CellCount)
-                {
-                    IndexSet = TSet<int32>(CellIndices);
-                }
-                // Randomly assign cell from cell indices
-                else
-                {
-                    IndexSet.Reserve(CellN);
-
-                    for (int32 i=0; i<CellN; ++i)
-                    {
-                        int32 CellIndex = Rand.RandHelper(CellIndices.Num());
-                        IndexSet.Emplace(CellIndices[CellIndex]);
-                        CellIndices.RemoveAtSwap(CellIndex, 1, false);
-                    }
-                }
-            }
-            // Invalid feature index
-            else
-            {
-                UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID FEATURE INDEX"));
-                return;
             }
         }
+        // Find random cells with specified feature index
+        else
+        if (FeatureGroup.CellGroups.IsValidIndex(FeatureId.Index))
+        {
+            const FJCVCellGroup& CellGroup(FeatureGroup.CellGroups[FeatureId.Index]);
+            const int32 FeatureCellCount = CellGroup.Num();
+            const int32 CellCount = FMath::Clamp(Count, 0, FeatureCellCount);
+
+            CellRefs.Reserve(CellCount);
+
+            // Feature cell count equals specified output count, copy feature cells
+            if (CellCount == FeatureCellCount)
+            {
+                for (FJCVCell* Cell : CellGroup)
+                {
+                    if (Traits.HasMatchingTraits(*Cell))
+                    {
+                        CellRefs.Emplace(Cell);
+                    }
+                }
+            }
+            // Randomly assign cell from cell indices
+            else
+            {
+                // Generate feature cell copy. Random cell will be fetch
+                // from the container to avoid duplicates.
+
+                TArray<FJCVCell*> FeatureCells = CellGroup;
+
+                while (CellRefs.Num() < CellCount && FeatureCells.Num() > 0)
+                {
+                    int32 CellIndex = Rand.RandHelper(FeatureCells.Num());
+                    FJCVCell* Cell(FeatureCells[CellIndex]);
+
+                    FeatureCells.RemoveAtSwap(CellIndex, 1, false);
+
+                    if (Traits.HasMatchingTraits(Cell))
+                    {
+                        CellRefs.Emplace(Cell);
+                    }
+                }
+            }
+        }
+        // Invalid feature index
         else
         {
-            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCells() ABORTED, INVALID FEATURE TYPE"));
+            UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellsByFeature() ABORTED, INVALID FEATURE INDEX"));
             return;
         }
     }
     else
     {
-        const int32 CellCount = MapRef.Num();
-        const int32 CellN = FMath::Clamp(Count, 0, CellCount);
-
-        TArray<int32> CellIndices;
-        CellIndices.Reserve(CellCount);
-
-        for (int32 i=0; i<CellCount; ++i)
-        {
-            CellIndices.Emplace(i);
-        }
-
-        IndexSet.Reserve(CellN);
-
-        for (int32 i=0; i<CellN; ++i)
-        {
-            int32 CellIndex = Rand.RandHelper(CellIndices.Num());
-            IndexSet.Emplace(CellIndices[CellIndex]);
-            CellIndices.RemoveAtSwap(CellIndex, 1, false);
-        }
-    }
-
-    // Convert index set to cell references
-
-    Cells.Reset(IndexSet.Num());
-
-    for (int32 i : IndexSet)
-    {
-        Cells.Emplace(MapRef.GetCell(i));
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellsByFeature() ABORTED, INVALID FEATURE TYPE"));
+        return;
     }
 }
 
-int32 UJCVDiagramAccessor::GetClosestCellAt(const FVector2D& Pos)
+TArray<int32> UJCVDiagramAccessor::GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders, int32 MinCellDistance)
 {
-    if (HasValidMap())
-    {
-        const FJCVSite* site = Map->GetDiagram().FindClosest(Pos);
-        return site ? site->index : -1;
-    }
-    return -1;
-}
-
-TArray<int32> UJCVDiagramAccessor::FilterPoints(const TArray<FVector2D>& Points, FJCVFeatureId FeatureId)
-{
-    TArray<int32> OutPointIndices;
-
-    if (! Map || Points.Num() == 0)
-    {
-        return OutPointIndices;
-    }
-
-    const FJCVDiagramContext& Diagram( Map->GetDiagram() );
-
-    const int32 PointNum = Points.Num();
-    const FJCVSite* SearchSite = Diagram.FindClosest(Points[0]);
-
-    // No initial search site found, diagram might be empty. Abort
-    if (! SearchSite)
-    {
-        return OutPointIndices;
-    }
-
-    // Reserve result space
-    OutPointIndices.Reserve(PointNum);
-
-    for (int32 i=0; i<PointNum; ++i)
-    {
-        check(SearchSite);
-
-        const FVector2D& Point(Points[i]);
-        const FJCVSite* Site = Diagram.FindFrom(Point, *SearchSite);
-        const FJCVCell* Cell = Map->GetCell(Site);
-
-        if (Site)
-        {
-            if (Cell->IsType(FeatureId.Type, FeatureId.Index))
-            {
-                OutPointIndices.Emplace(i);
-            }
-
-            SearchSite = Site;
-        }
-    }
-
-    // Shrink reserved space
-    OutPointIndices.Shrink();
-
-    return MoveTemp(OutPointIndices);
-}
-
-FJCVCellRef UJCVDiagramAccessor::FindCell(const FVector2D& Position)
-{
-    return Map
-        ? FJCVCellRef(Map->GetCell((*Map)->FindClosest(Position)))
-        : FJCVCellRef();
-}
-
-FJCVCellRefGroup UJCVDiagramAccessor::FindCells(const TArray<FVector2D>& Positions)
-{
-    FJCVCellRefGroup CellGroup;
+    TArray<int32> OutIndices;
 
     if (! HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::FindCell() ABORTED, INVALID MAP"));
-        return CellGroup;
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetRandomCellWithinFeature() ABORTED, INVALID MAP"));
+        return OutIndices;
     }
 
-    if (Positions.Num() <= 0)
+    FJCVCellGroup Cells;
+    FRandomStream Rand(Seed);
+
+    FJCVFeatureUtility::GetRandomCellWithinFeature(
+        Cells,
+        *Map,
+        FeatureType,
+        CellCount,
+        Rand,
+        bAllowBorders,
+        MinCellDistance
+        );
+
+    OutIndices.Reserve(Cells.Num());
+
+    for (const FJCVCell* c : Cells)
     {
-        return CellGroup;
-    }
-
-    const FJCVDiagramMap& MapRef(*Map);
-    const FJCVSite* SearchSite = MapRef->FindClosest(Positions[0]);
-
-    CellGroup.Data.Reserve(Positions.Num());
-
-    for (const FVector2D& Point : Positions)
-    {
-        check(SearchSite);
-
-        // Invalid search starting cell, abort
-        if (! SearchSite)
+        if (c)
         {
-            break;
-        }
-
-        const FJCVSite* Site = MapRef->FindFrom(Point, *SearchSite);
-
-        if (Site)
-        {
-            CellGroup.Data.Emplace(MapRef.GetCell(Site));
-            SearchSite = Site;
+            OutIndices.Emplace(c->GetIndex());
         }
     }
 
-    return CellGroup;
+    return OutIndices;
 }
 
-TArray<FJCVCellRefGroup> UJCVDiagramAccessor::FindCellsWithinRects(const TArray<FBox2D>& Rects)
+FJCVCellRef UJCVDiagramAccessor::GetClosestCellAt(const FVector2D& Pos)
 {
-    TArray<FJCVCellRefGroup> CellGroups;
-    CellGroups.SetNum(Rects.Num());
-
-    if (! Map || Rects.Num() <= 0)
+    if (HasValidMap())
     {
-        return CellGroups;
+        const FJCVSite* Site = Map->GetDiagram().FindClosest(Pos);
+        return FJCVCellRef(Map->GetCell(Site));
+    }
+    return FJCVCellRef();
+}
+
+void UJCVDiagramAccessor::GetCellsWithinRect(TArray<FJCVCellRef>& CellRefs, const FBox2D& Rect)
+{
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellsWithinRect() ABORTED, INVALID MAP"));
+        return;
     }
 
     FJCVDiagramMap& MapRef(*Map);
-    const FJCVSite* SearchSite = nullptr;
 
-    for (int32 i=0; i<Rects.Num(); ++i)
+    if (! Rect.bIsValid)
     {
-        const FBox2D& Rect(Rects[i]);
-        FJCVCellRefGroup& CellGroup(CellGroups[i]);
-
-        if (! Rect.bIsValid)
-        {
-            continue;
-        }
-
-        if (! SearchSite)
-        {
-            SearchSite = MapRef->FindClosest(Rect.Min);
-        }
-        else
-        {
-            SearchSite = MapRef->FindFrom(Rect.Min, *SearchSite);
-        }
-
-        TArray<const FJCVSite*> Sites;
-        MapRef->FindAllWithin(Rect, *SearchSite, Sites);
-
-        CellGroup.Data.Reserve(Sites.Num());
-
-        for (const FJCVSite* Site : Sites)
-        {
-            CellGroup.Data.Emplace(MapRef.GetCell(Site));
-        }
+        return;
     }
 
-    return CellGroups;
+    const FJCVSite* SearchSite = MapRef->FindClosest(Rect.Min);
+
+    TArray<const FJCVSite*> Sites;
+    MapRef->FindAllWithin(Rect, *SearchSite, Sites);
+
+    CellRefs.Reserve(Sites.Num());
+
+    for (const FJCVSite* Site : Sites)
+    {
+        CellRefs.Emplace(MapRef.GetCell(Site));
+    }
+}
+
+void UJCVDiagramAccessor::GetCellWithinOriginRadius(
+    TArray<FJCVCellRef>& CellRefs,
+    const FJCVCellRef& OriginCellRef,
+    float Radius,
+    FJCVFeatureId FeatureId,
+    bool bAgainstAnyType
+    )
+{
+    const FJCVCell* OriginCell(OriginCellRef.Data);
+
+    if (! HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellWithOriginRadius() ABORTED, INVALID MAP"));
+        return;
+    }
+    
+    if (! Map->IsValidCell(OriginCell))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellWithOriginRadius() ABORTED, INVALID ORIGIN CELL"));
+        return;
+    }
+
+
+    FJCVDiagramMap& MapRef(*Map);
+    TSet<const FJCVCell*> VisitedSet;
+    TQueue<const FJCVCell*> ExpandQueue;
+
+    CellRefs.Emplace(OriginCellRef);
+    VisitedSet.Emplace(OriginCell);
+    ExpandQueue.Enqueue(OriginCell);
+
+    const FVector2D Center(OriginCell->ToVector2D());
+    const float RadiusSq = Radius * Radius;
+
+    while (! ExpandQueue.IsEmpty())
+    {
+        const FJCVCell* Cell;
+        ExpandQueue.Dequeue(Cell);
+
+        check(Cell);
+
+        TArray<const FJCVSite*> Neighbours;
+        MapRef->GetNeighbours(*Cell->Site, Neighbours);
+
+        for (const FJCVSite* Site : Neighbours)
+        {
+            const FJCVCell* Neighbour(MapRef.GetCell(Site));
+
+            if (! Neighbour || VisitedSet.Contains(Neighbour))
+            {
+                continue;
+            }
+
+            TArray<FVector2D> Points;
+            MapRef->GetPoints(*Site, Points);
+
+            for (const FVector2D& Point : Points)
+            {
+                if ((Point-Center).SizeSquared() < RadiusSq)
+                {
+                    VisitedSet.Emplace(Neighbour);
+                    ExpandQueue.Enqueue(Neighbour);
+
+                    if (bAgainstAnyType || Neighbour->IsType(FeatureId.Type, FeatureId.Index))
+                    {
+                        CellRefs.Emplace(Neighbour);
+                    }
+
+                    break;
+                }
+            }
+        }
+    }
 }
 
 FJCVCellRefGroup UJCVDiagramAccessor::FindBorderCells(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders, bool bAgainstAnyType)
@@ -1389,13 +1546,11 @@ FJCVCellRefGroup UJCVDiagramAccessor::FindBorderCells(uint8 FeatureType0, uint8 
     return CellGroup;
 }
 
-TArray<FJCVCellJunctionRef> UJCVDiagramAccessor::FindJunctionCells(uint8 FeatureType)
+void UJCVDiagramAccessor::FindJunctionCells(TArray<FJCVCellJunctionRef>& JunctionRefs, uint8 FeatureType)
 {
-    TArray<FJCVCellJunctionRef> JunctionRefs;
-
     if (! HasValidMap())
     {
-        return JunctionRefs;
+        return;
     }
 
     const uint8 ft = FeatureType;
@@ -1405,7 +1560,7 @@ TArray<FJCVCellJunctionRef> UJCVDiagramAccessor::FindJunctionCells(uint8 Feature
 
     TArray<FJCVCellJunction> Junctions;
 
-    for (const FJCVCell* Cell : CellSet)
+    for (FJCVCell* Cell : CellSet)
     {
         check(Cell != nullptr);
 
@@ -1420,16 +1575,20 @@ TArray<FJCVCellJunctionRef> UJCVDiagramAccessor::FindJunctionCells(uint8 Feature
         JunctionRefs.Emplace(Junction.Point, Junction.Cells);
     }
 
-    return JunctionRefs;
+    return;
 }
 
-TArray<FJCVPointGroup> UJCVDiagramAccessor::FindEdgePoints(uint8 FeatureType0, uint8 FeatureType1, bool bAllowBorders, bool bAgainstAnyType)
+void UJCVDiagramAccessor::FindEdgePoints(
+    TArray<FJCVPointGroup>& PointGroups,
+    uint8 FeatureType0,
+    uint8 FeatureType1,
+    bool bAllowBorders,
+    bool bAgainstAnyType
+    )
 {
-    TArray<FJCVPointGroup> PointGroups;
-
     if (! HasValidMap())
     {
-        return PointGroups;
+        return;
     }
 
     const uint8 ft0 = FeatureType0;
@@ -1439,7 +1598,7 @@ TArray<FJCVPointGroup> UJCVDiagramAccessor::FindEdgePoints(uint8 FeatureType0, u
     // Feature type is equal and wildcard check flag is set to false, abort
     if (! bAgainstAnyType && ft0 == ft1)
     {
-        return PointGroups;
+        return;
     }
 
     for (int32 fi=0; fi<FeatureGroupCount; ++fi)
@@ -1496,7 +1655,7 @@ TArray<FJCVPointGroup> UJCVDiagramAccessor::FindEdgePoints(uint8 FeatureType0, u
         }
     }
 
-    return PointGroups;
+    return;
 }
 
 bool UJCVDiagramAccessor::FindEdgePointsWithEndPoints(
@@ -2098,84 +2257,6 @@ void UJCVDiagramAccessor::GenerateOrderedFeatureBorderPoints(
 #endif
 }
 
-FJCVCellRefGroup UJCVDiagramAccessor::GetCellByOriginRadius(
-    const FJCVCellRef& OriginCellRef,
-    float Radius,
-    FJCVFeatureId FeatureId,
-    bool bAgainstAnyType
-    )
-{
-    FJCVCellRefGroup OutCellGroup;
-    const FJCVCell* OriginCell(OriginCellRef.Data);
-
-    if (! HasValidMap())
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellByOriginRadius() ABORTED, INVALID MAP"));
-        return OutCellGroup;
-    }
-    
-    if (! Map->IsValidCell(OriginCell))
-    {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetCellByOriginRadius() ABORTED, INVALID ORIGIN CELL"));
-        return OutCellGroup;
-    }
-
-    TArray<FJCVCellRef>& OutCells(OutCellGroup.Data);
-
-    FJCVDiagramMap& MapRef(*Map);
-    TSet<const FJCVCell*> VisitedSet;
-    TQueue<const FJCVCell*> ExpandQueue;
-
-    OutCells.Emplace(OriginCellRef);
-    VisitedSet.Emplace(OriginCell);
-    ExpandQueue.Enqueue(OriginCell);
-
-    const FVector2D Center(OriginCell->ToVector2D());
-    const float RadiusSq = Radius * Radius;
-
-    while (! ExpandQueue.IsEmpty())
-    {
-        const FJCVCell* Cell;
-        ExpandQueue.Dequeue(Cell);
-
-        check(Cell);
-
-        TArray<const FJCVSite*> Neighbours;
-        MapRef->GetNeighbours(*Cell->Site, Neighbours);
-
-        for (const FJCVSite* Site : Neighbours)
-        {
-            const FJCVCell* Neighbour(MapRef.GetCell(Site));
-
-            if (! Neighbour || VisitedSet.Contains(Neighbour))
-            {
-                continue;
-            }
-
-            TArray<FVector2D> Points;
-            MapRef->GetPoints(*Site, Points);
-
-            for (const FVector2D& Point : Points)
-            {
-                if ((Point-Center).SizeSquared() < RadiusSq)
-                {
-                    VisitedSet.Emplace(Neighbour);
-                    ExpandQueue.Enqueue(Neighbour);
-
-                    if (bAgainstAnyType || Neighbour->IsType(FeatureId.Type, FeatureId.Index))
-                    {
-                        OutCells.Emplace(Neighbour);
-                    }
-
-                    break;
-                }
-            }
-        }
-    }
-
-    return OutCellGroup;
-}
-
 FJCVCellRefGroup UJCVDiagramAccessor::ExpandCellQuery(const FJCVCellRef& CellRef, int32 ExpandCount, FJCVFeatureId FeatureId, bool bAgainstAnyType)
 {
     FJCVCellRefGroup CellGroup;
@@ -2441,59 +2522,59 @@ float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& Origi
 
 // CELL UTILITY FUNCTIONS
 
-TArray<int32> UJCVDiagramAccessor::GenerateCellGridIndices(const FJCVCellRef& Cell, const FIntPoint& GridDimension, const float BoundsExpand)
-{
-    TArray<int32> Indices;
-
-    if (! HasValidMap() || ! Cell.Data || ! Cell.Data->Site)
-    {
-        return Indices;
-    }
-
-    const FJCVSite& Site(*Cell.Data->Site);
-    FJCVDiagramMap& MapRef(*Map);
-
-    FBox2D Bounds;
-    FVector2D SiteCenter(Site.p.x, Site.p.y);
-    float SiteCenterRadiusSq;
-
-    MapRef->GetSiteBounds(Site, Bounds);
-    SiteCenterRadiusSq = MapRef->GetShortestMidPoint(Site);
-
-    if (! Bounds.bIsValid)
-    {
-        return Indices;
-    }
-
-    FVector2D VecDim(GridDimension.X, GridDimension.Y);
-
-    Bounds = Bounds.ExpandBy(BoundsExpand);
-    Bounds.Min = FMath::Clamp(Bounds.Min, FVector2D::ZeroVector, VecDim);
-    Bounds.Max = FMath::Clamp(Bounds.Max, FVector2D::ZeroVector, VecDim);
-
-    const FIntPoint IntMin(Bounds.Min.X, Bounds.Min.Y);
-    const FIntPoint IntMax(Bounds.Max.X, Bounds.Max.Y);
-    const int32 CountX = IntMax.X-IntMin.X;
-    const int32 CountY = IntMax.Y-IntMin.Y;
-    const int32 Stride = GridDimension.X;
-
-    Indices.Reserve(CountX*CountY);
-
-    for (int32 y=IntMin.Y; y<IntMax.Y; ++y)
-    for (int32 x=IntMin.X; x<IntMax.X; ++x)
-    {
-        FVector2D Pos(x, y);
-
-        if ((Pos-SiteCenter).SizeSquared() < SiteCenterRadiusSq || MapRef->IsWithin(Site, Pos))
-        {
-            Indices.Emplace(x+y*Stride);
-        }
-    }
-
-    Indices.Shrink();
-
-    return Indices;
-}
+//TArray<int32> UJCVDiagramAccessor::GenerateCellGridIndices(const FJCVCellRef& Cell, const FIntPoint& GridDimension, const float BoundsExpand)
+//{
+//    TArray<int32> Indices;
+//
+//    if (! HasValidMap() || ! Cell.Data || ! Cell.Data->Site)
+//    {
+//        return Indices;
+//    }
+//
+//    const FJCVSite& Site(*Cell.Data->Site);
+//    FJCVDiagramMap& MapRef(*Map);
+//
+//    FBox2D Bounds;
+//    FVector2D SiteCenter(Site.p.x, Site.p.y);
+//    float SiteCenterRadiusSq;
+//
+//    MapRef->GetSiteBounds(Site, Bounds);
+//    SiteCenterRadiusSq = MapRef->GetShortestMidPoint(Site);
+//
+//    if (! Bounds.bIsValid)
+//    {
+//        return Indices;
+//    }
+//
+//    FVector2D VecDim(GridDimension.X, GridDimension.Y);
+//
+//    Bounds = Bounds.ExpandBy(BoundsExpand);
+//    Bounds.Min = FMath::Clamp(Bounds.Min, FVector2D::ZeroVector, VecDim);
+//    Bounds.Max = FMath::Clamp(Bounds.Max, FVector2D::ZeroVector, VecDim);
+//
+//    const FIntPoint IntMin(Bounds.Min.X, Bounds.Min.Y);
+//    const FIntPoint IntMax(Bounds.Max.X, Bounds.Max.Y);
+//    const int32 CountX = IntMax.X-IntMin.X;
+//    const int32 CountY = IntMax.Y-IntMin.Y;
+//    const int32 Stride = GridDimension.X;
+//
+//    Indices.Reserve(CountX*CountY);
+//
+//    for (int32 y=IntMin.Y; y<IntMax.Y; ++y)
+//    for (int32 x=IntMin.X; x<IntMax.X; ++x)
+//    {
+//        FVector2D Pos(x, y);
+//
+//        if ((Pos-SiteCenter).SizeSquared() < SiteCenterRadiusSq || MapRef->IsWithin(Site, Pos))
+//        {
+//            Indices.Emplace(x+y*Stride);
+//        }
+//    }
+//
+//    Indices.Shrink();
+//
+//    return Indices;
+//}
 
 // MAP UTILITY FUNCTIONS
 

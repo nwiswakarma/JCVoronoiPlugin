@@ -210,11 +210,11 @@ struct JCVORONOIPLUGIN_API FJCVCellRef
     {
     }
 
-    FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
+    explicit FJCVCellRef(const FJCVCell* Cell) : Data(Cell)
     {
     }
 
-    FJCVCellRef(const FJCVCell& Cell) : Data(&Cell)
+    explicit FJCVCellRef(const FJCVCell& Cell) : Data(&Cell)
     {
     }
 
@@ -301,7 +301,7 @@ struct JCVORONOIPLUGIN_API FJCVCellJunctionRef
 
     FJCVCellJunctionRef(
         const FVector2D& InPoint,
-        const TArray<const FJCVCell*>& InCells
+        const TArray<FJCVCell*>& InCells
         )
         : Point(InPoint)
         , Cells(InCells)
