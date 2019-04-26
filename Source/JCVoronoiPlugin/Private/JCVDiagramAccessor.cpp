@@ -90,7 +90,7 @@ void UJCVDiagramAccessor::GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, 
 //{
 //    if (HasValidMap())
 //    {
-//        FJCVCellTraits_Deprecated CellTraits(EJCVCellFeature::UNDEFINED, FeatureType);
+//        FJCVCellTraits_Deprecated CellTraits(JCV_CF_UNMARKED, FeatureType);
 //        FJCVValueGenerator::MarkFeatures(*Map, CellTraits);
 //    }
 //    else

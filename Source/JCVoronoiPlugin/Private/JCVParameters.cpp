@@ -40,7 +40,7 @@ FJCVCellTraits::FJCVCellTraits(const FFilterCallback& InFilterCallback)
 
 //bool FJCVCellTraits_Deprecated::HasUndefinedType(const FJCVCell& c) const
 //{
-//    return c.FeatureType == EJCVCellFeature::UNDEFINED && HasValidFeature(c);
+//    return c.FeatureType == JCV_CF_UNMARKED && HasValidFeature(c);
 //}
 
 //bool FJCVValueTraits_Deprecated::HasValidFeature(const FJCVCell& c) const

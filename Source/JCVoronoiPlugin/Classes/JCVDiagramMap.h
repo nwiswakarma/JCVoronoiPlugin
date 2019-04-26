@@ -63,9 +63,7 @@ typedef TSet<const FJCVEdge*>   FJCVConstEdgeSet;
 
 enum EJCVCellFeature
 {
-    UNDEFINED = 255,
-    ZERO      = 0,
-    ONE       = 1
+    JCV_CF_UNMARKED = 0
 };
 
 struct FJCVCell
@@ -73,14 +71,14 @@ struct FJCVCell
     const FJCVSite* Site = nullptr;
     float Value          = 0.f;
     bool bIsBorder       = false;
-    uint8 FeatureType    = EJCVCellFeature::UNDEFINED;
+    uint8 FeatureType    = JCV_CF_UNMARKED;
     int32 FeatureIndex   = 0;
 
     FJCVCell(const FJCVSite& s, float h, bool b)
         : Site(&s)
         , Value(h)
         , bIsBorder(b)
-        , FeatureType(EJCVCellFeature::UNDEFINED)
+        , FeatureType(JCV_CF_UNMARKED)
         , FeatureIndex(0)
     {
     }
@@ -136,11 +134,6 @@ struct FJCVCell
             }
             while ((g=g->next) != nullptr);
         }
-    }
-
-    FORCEINLINE bool HasFeatureType() const
-    {
-        return FeatureType != EJCVCellFeature::UNDEFINED && FeatureIndex >= 0;
     }
 
     FORCEINLINE bool IsBorder() const
@@ -1327,12 +1320,12 @@ public:
 
     FORCEINLINE FJCVDiagramMap& CreateMap(int32 MapId = 0, bool bReset = false)
     {
-        return CreateMap(MapId, EJCVCellFeature::UNDEFINED, 0, bReset);
+        return CreateMap(MapId, JCV_CF_UNMARKED, 0, bReset);
     }
 
     FJCVDiagramMap& CreateMap(
         int32 MapId = 0,
-        uint8 FeatureType = EJCVCellFeature::UNDEFINED,
+        uint8 FeatureType = JCV_CF_UNMARKED,
         int32 FeatureIndex = 0,
         bool bReset = false
         )

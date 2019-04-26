@@ -71,7 +71,7 @@ void UJCVDiagramObject::CreateMap(int32 ContextId, int32 MapId)
 {
     if (HasContext(ContextId))
     {
-        CreateMapWithDefaultType(ContextId, MapId, EJCVCellFeature::UNDEFINED, 0);
+        CreateMapWithDefaultType(ContextId, MapId, JCV_CF_UNMARKED, 0);
     }
     else
     {

@@ -29,7 +29,7 @@
 
 FJCVDiagramMap::FJCVDiagramMap(FJCVDiagramContext& d) : Diagram(d)
 {
-    Init(EJCVCellFeature::UNDEFINED, 0);
+    Init(JCV_CF_UNMARKED, 0);
 }
 
 FJCVDiagramMap::FJCVDiagramMap(FJCVDiagramContext& d, uint8 FeatureType, int32 FeatureIndex) : Diagram(d)
@@ -128,7 +128,7 @@ void FJCVDiagramMap::ResetFeatures(uint8 FeatureType, int32 FeatureIndex)
             const FJCVCellGroup& fg( ft.CellGroups[i] );
             for (FJCVCell* c : fg)
                 if (c)
-                    c->SetType(EJCVCellFeature::UNDEFINED);
+                    c->SetType(JCV_CF_UNMARKED);
         }
     }
     else
@@ -139,7 +139,7 @@ void FJCVDiagramMap::ResetFeatures(uint8 FeatureType, int32 FeatureIndex)
             const FJCVCellGroup& fg( *f );
             for (FJCVCell* c : fg)
                 if (c)
-                    c->SetType(EJCVCellFeature::UNDEFINED);
+                    c->SetType(JCV_CF_UNMARKED);
         }
     }
 }
@@ -152,15 +152,12 @@ void FJCVDiagramMap::GroupByFeatures()
 
     for (FJCVCell& c : Cells)
     {
-        if (c.HasFeatureType())
+        if (! FeatureGroups.IsValidIndex(c.FeatureType))
         {
-            if (! FeatureGroups.IsValidIndex(c.FeatureType))
-            {
-                FeatureGroups.SetNum(c.FeatureType+1);
-            }
-
-            FeatureGroups[c.FeatureType].AddCell(c, cellN);
+            FeatureGroups.SetNum(c.FeatureType+1);
         }
+
+        FeatureGroups[c.FeatureType].AddCell(c, cellN);
     }
 
     for (int32 i=0; i<GetFeatureCount(); ++i)

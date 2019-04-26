@@ -640,6 +640,7 @@ void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap
     for (int32 i=0; i<FeatureIndices.Num(); ++i)
     {
         const int32 CurFeatureIndex = FeatureIndices[i];
+        const int32 DepthFeatureType = i+1;
 
         FJCVConstCellSet VisitedCellSet;
         FJCVConstCellSet PrevCellSet;
@@ -669,7 +670,7 @@ void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap
         for (const FJCVCell* Cell : CurCellSet)
         {
             FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
-            DstCell.SetType(i, 0);
+            DstCell.SetType(DepthFeatureType, 0);
         }
 
         int32 Depth = 1;
@@ -690,7 +691,7 @@ void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap
             for (const FJCVCell* Cell : CurCellSet)
             {
                 FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
-                DstCell.SetType(i, Depth);
+                DstCell.SetType(DepthFeatureType, Depth);
             }
 
             ++Depth;
