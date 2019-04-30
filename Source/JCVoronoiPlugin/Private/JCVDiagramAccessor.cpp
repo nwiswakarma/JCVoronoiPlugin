@@ -27,6 +27,7 @@
 
 #include "JCVDiagramAccessor.h"
 #include "JCVDiagramMap.h"
+#include "JCVCellUtility.h"
 #include "JCVFeatureUtility.h"
 #include "JCVValueGenerator.h"
 #include "JCVPlateGenerator.h"
@@ -482,7 +483,7 @@ void UJCVDiagramAccessor::MarkPositions(const TArray<FVector2D>& Positions, FJCV
 
 bool UJCVDiagramAccessor::HasFeature(FJCVFeatureId FeatureId) const
 {
-    return Map ? (Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index) != nullptr) : 0;
+    return Map ? (Map->GetFeatureCellGroup(FeatureId) != nullptr) : 0;
 }
 
 int32 UJCVDiagramAccessor::GetFeatureCount() const
@@ -504,7 +505,7 @@ int32 UJCVDiagramAccessor::GetFeatureCellCount(FJCVFeatureId FeatureId) const
 {
     if (Map)
     {
-        FJCVCellGroup* FeatureCells = Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index);
+        FJCVCellGroup* FeatureCells = Map->GetFeatureCellGroup(FeatureId);
         return FeatureCells ? FeatureCells->Num() : 0;
     }
     
@@ -770,13 +771,13 @@ void UJCVDiagramAccessor::MapNormalizedDistanceFromCell(FJCVCellRef OriginCellRe
         return;
     }
     
-    if (! Map->HasFeatureType(FeatureId.Type))
+    if (! Map->HasFeature(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::MapNormalizedDistanceFromCell() ABORTED, INVALID FEATURE TYPE"));
         return;
     }
 
-    FJCVValueGenerator::MapNormalizedDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, bAgainstAnyType);
+    FJCVValueGenerator::MapNormalizedDistanceFromCell(*Map, *OriginCell, FeatureId, bAgainstAnyType);
 }
 
 void UJCVDiagramAccessor::GetFeaturePoints(TArray<FVector2D>& Points, FJCVFeatureId FeatureId)
@@ -786,20 +787,44 @@ void UJCVDiagramAccessor::GetFeaturePoints(TArray<FVector2D>& Points, FJCVFeatur
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeaturePoints() ABORTED, INVALID MAP"));
         return;
     }
-
-    const FJCVCellGroup* CellGroupPtr = Map->GetCellsByFeature(FeatureId.Type, FeatureId.Index);
-
-    if (CellGroupPtr)
+    else
+    if (! Map->HasFeature(FeatureId.Type))
     {
-        const FJCVCellGroup& CellGroup(*CellGroupPtr);
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFeaturePoints() ABORTED, INVALID FEATURE"));
+        return;
+    }
 
-        Points.Reserve(CellGroup.Num());
+    // Get all feature points of a feature type
+    if (FeatureId.Index < 0)
+    {
+        const FJCVCellGroup* CellGroupPtr = Map->GetFeatureCellGroup(FeatureId);
 
-        for (const FJCVCell* Cell : CellGroup)
+        if (CellGroupPtr)
         {
-            if (Cell)
+            const FJCVCellGroup& CellGroup(*CellGroupPtr);
+
+            Points.Reserve(CellGroup.Num());
+
+            for (const FJCVCell* Cell : CellGroup)
             {
+                check(Cell != nullptr);
                 Points.Emplace(Cell->ToVector2D());
+            }
+        }
+    }
+    // Get feature points of a feature cell group
+    else
+    {
+        const FJCVFeatureGroup& FeatureGroup(*Map->GetFeatureGroup(FeatureId.Type));
+
+        for (const FJCVCellGroup& CellGroup : FeatureGroup.CellGroups)
+        {
+            Points.Reserve(Points.Num() + CellGroup.Num());
+
+            for (const FJCVCell* Cell : CellGroup)
+            {
+                check(Cell != nullptr);
+                Points.Emplace(Cell->ToVector2DUnsafe());
             }
         }
     }
@@ -980,7 +1005,7 @@ void UJCVDiagramAccessor::GetCellRange(TArray<FJCVCellRef>& CellRefs, const FVec
     }
 }
 
-FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVCellTraits& Traits)
+FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVCellTraitsRef& Traits)
 {
     if (! HasValidMap())
     {
@@ -996,7 +1021,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVCellTraits&
     FRandomStream Rand(Seed);
     const int32 MaxCellCount = Map->Num();
 
-    if (Traits.HasValidCallback())
+    if (Traits.HasValidTraits())
     {
         FJCVCell* RandomCell = nullptr;
 
@@ -1027,7 +1052,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCell(int32 Seed, const FJCVCellTraits&
     }
 }
 
-FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits)
+FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraitsRef& Traits)
 {
     FJCVCellRef CellRef;
 
@@ -1061,7 +1086,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFe
 
             if (NonEmptyCellGroups.Num() > 0)
             {
-                if (Traits.HasValidCallback())
+                if (Traits.HasValidTraits())
                 {
                     // Random cell search with valid traits requires max traits check iteration
                     int32 TraitsCheckIt = 0;
@@ -1101,7 +1126,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFe
         {
             const FJCVCellGroup& CellGroup = FeatureGroup.CellGroups[FeatureId.Index];
 
-            if (Traits.HasValidCallback())
+            if (Traits.HasValidTraits())
             {
                 // Random cell search with valid traits requires max traits check iteration
                 int32 TraitsCheckIt = 0;
@@ -1145,7 +1170,7 @@ FJCVCellRef UJCVDiagramAccessor::GetRandomCellByFeature(int32 Seed, const FJCVFe
     return CellRef;
 }
 
-void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVCellTraits& Traits, int32 Count)
+void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVCellTraitsRef& Traits, int32 Count)
 {
     if (! HasValidMap())
     {
@@ -1174,7 +1199,7 @@ void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Se
 
         while (CellRefs.Num() < CellCount)
         {
-            if (Traits.HasValidCallback())
+            if (Traits.HasValidTraits())
             {
                 // Random cell search with valid traits requires max traits check iteration
                 int32 TraitsCheckIt = 0;
@@ -1238,7 +1263,7 @@ void UJCVDiagramAccessor::GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Se
     }
 }
 
-void UJCVDiagramAccessor::GetRandomCellsByFeature(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits, int32 Count)
+void UJCVDiagramAccessor::GetRandomCellsByFeature(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraitsRef& Traits, int32 Count)
 {
     if (! HasValidMap())
     {
@@ -2486,13 +2511,13 @@ float UJCVDiagramAccessor::GetClosestDistanceToFeature(const FJCVCellRef& Origin
         return 0.f;
     }
 
-    if (! Map->HasFeatureType(FeatureId.Type))
+    if (! Map->HasFeature(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID FEATURE TYPE"));
         return 0.f;
     }
 
-    return FJCVValueGenerator::GetClosestDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, false);
+    return FJCVCellUtility::GetClosestDistanceFromCell(*Map, *OriginCell, FeatureId, false);
 }
 
 float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& OriginCellRef, FJCVFeatureId FeatureId)
@@ -2511,13 +2536,13 @@ float UJCVDiagramAccessor::GetFurthestDistanceToFeature(const FJCVCellRef& Origi
         return 0.f;
     }
 
-    if (! Map->HasFeatureType(FeatureId.Type))
+    if (! Map->HasFeature(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GetFurthestDistanceToFeature() ABORTED, INVALID FEATURE TYPE"));
         return 0.f;
     }
 
-    return FJCVValueGenerator::GetFurthestDistanceFromCell(*Map, *OriginCell, FeatureId.Type, FeatureId.Index, false);
+    return FJCVCellUtility::GetFurthestDistanceFromCell(*Map, *OriginCell, FeatureId, false);
 }
 
 // CELL UTILITY FUNCTIONS
@@ -2810,7 +2835,7 @@ void UJCVDiagramAccessor::GenerateDualGeometryByFeature(FJCVDualGeometry& Geomet
         return;
     }
 
-    if (! Map->HasFeatureType(FeatureId.Type))
+    if (! Map->HasFeature(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GenerateDualGeometry() ABORTED, INVALID FEATURE TYPE"));
         return;
@@ -2893,7 +2918,7 @@ void UJCVDiagramAccessor::GeneratePolyGeometryByFeature(UPARAM(ref) FJCVPolyGeom
         return;
     }
 
-    if (! Map->HasFeatureType(FeatureId.Type))
+    if (! Map->HasFeature(FeatureId.Type))
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramAccessor::GeneratePolyGeometryByFeature() ABORTED, INVALID FEATURE TYPE"));
         return;

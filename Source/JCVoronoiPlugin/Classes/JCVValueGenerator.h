@@ -29,10 +29,10 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "JCVTypes.h"
 #include "JCVParameters.h"
 #include "JCVValueGenerator.generated.h"
 
+class FJCVDiagramMap;
 class UJCVDiagramAccessor;
 
 class FJCVValueGenerator
@@ -78,49 +78,10 @@ public:
     //    }
     //}
 
-    static float GetClosestDistanceFromCellSq(
-        FJCVDiagramMap& Map,
-        const FJCVCell& OriginCell,
-        uint8 FeatureType,
-        int32 FeatureIndex = -1,
-        bool bAgainstAnyType = false
-        );
-
-    static float GetFurthestDistanceFromCellSq(
-        FJCVDiagramMap& Map,
-        const FJCVCell& OriginCell,
-        uint8 FeatureType,
-        int32 FeatureIndex = -1,
-        bool bAgainstAnyType = false
-        );
-
-    FORCEINLINE static float GetClosestDistanceFromCell(
-        FJCVDiagramMap& Map,
-        const FJCVCell& OriginCell,
-        uint8 FeatureType,
-        int32 FeatureIndex = -1,
-        bool bAgainstAnyType = false
-        )
-    {
-        return FMath::Sqrt(GetClosestDistanceFromCellSq(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType));
-    }
-
-    FORCEINLINE static float GetFurthestDistanceFromCell(
-        FJCVDiagramMap& Map,
-        const FJCVCell& OriginCell,
-        uint8 FeatureType,
-        int32 FeatureIndex = -1,
-        bool bAgainstAnyType = false
-        )
-    {
-        return FMath::Sqrt(GetFurthestDistanceFromCellSq(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType));
-    }
-
     static void MapNormalizedDistanceFromCell(
         FJCVDiagramMap& Map,
         const FJCVCell& OriginCell,
-        uint8 FeatureType,
-        int32 FeatureIndex = -1,
+        const FJCVFeatureId& FeatureId,
         bool bAgainstAnyType = false
         );
 };

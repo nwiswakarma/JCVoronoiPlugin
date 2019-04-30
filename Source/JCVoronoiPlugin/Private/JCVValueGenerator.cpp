@@ -283,95 +283,21 @@ void FJCVValueGenerator::AddRadialFill(FJCVDiagramMap& Map, FRandomStream& Rand,
 //    }
 //}
 
-float FJCVValueGenerator::GetClosestDistanceFromCellSq(
-    FJCVDiagramMap& Map,
-    const FJCVCell& OriginCell,
-    uint8 FeatureType,
-    int32 FeatureIndex,
-    bool bAgainstAnyType
-    )
-{
-    check(Map.HasFeatureType(FeatureType));
-    check(Map.IsValidCell(&OriginCell));
-
-    const FVector2D Origin = OriginCell.ToVector2D();
-    float DistanceToFeatureSq = BIG_NUMBER;
-
-    TFunctionRef<void(FJCVCell& Cell)> CellCallback(
-        [&](FJCVCell& Cell)
-        {
-            const FVector2D CellPoint = Cell.ToVector2D();
-            const float CellDistSq = (CellPoint-Origin).SizeSquared();
-
-            if (CellDistSq < DistanceToFeatureSq)
-            {
-                DistanceToFeatureSq = CellDistSq;
-            }
-        } );
-
-    if (bAgainstAnyType)
-    {
-        Map.VisitCells(CellCallback, &OriginCell);
-    }
-    else
-    {
-        Map.VisitFeatureCells(CellCallback, FeatureType, FeatureIndex);
-    }
-
-    return DistanceToFeatureSq;
-}
-
-float FJCVValueGenerator::GetFurthestDistanceFromCellSq(
-    FJCVDiagramMap& Map,
-    const FJCVCell& OriginCell,
-    uint8 FeatureType,
-    int32 FeatureIndex,
-    bool bAgainstAnyType
-    )
-{
-    check(Map.HasFeatureType(FeatureType));
-    check(Map.IsValidCell(&OriginCell));
-
-    const FVector2D Origin = OriginCell.ToVector2D();
-    float DistanceToFeatureSq = TNumericLimits<float>::Min();
-
-    TFunctionRef<void(FJCVCell& Cell)> CellCallback(
-        [&](FJCVCell& Cell)
-        {
-            const FVector2D CellPoint = Cell.ToVector2D();
-            const float CellDistSq = (CellPoint-Origin).SizeSquared();
-
-            if (CellDistSq > DistanceToFeatureSq)
-            {
-                DistanceToFeatureSq = CellDistSq;
-            }
-        } );
-
-    if (bAgainstAnyType)
-    {
-        Map.VisitCells(CellCallback, &OriginCell);
-    }
-    else
-    {
-        Map.VisitFeatureCells(CellCallback, FeatureType, FeatureIndex);
-    }
-
-    return DistanceToFeatureSq;
-}
-
 void FJCVValueGenerator::MapNormalizedDistanceFromCell(
     FJCVDiagramMap& Map,
     const FJCVCell& OriginCell,
-    uint8 FeatureType,
-    int32 FeatureIndex,
+    const FJCVFeatureId& FeatureId,
     bool bAgainstAnyType
     )
 {
-    check(Map.HasFeatureType(FeatureType));
+    const uint8 FeatureType = FeatureId.Type;
+    const int32 FeatureIndex = FeatureId.Index;
+
+    check(Map.HasFeature(FeatureType));
     check(Map.IsValidCell(&OriginCell));
 
     const FVector2D Origin = OriginCell.ToVector2D();
-    const float FurthestDistanceFromCell = GetFurthestDistanceFromCell(Map, OriginCell, FeatureType, FeatureIndex, bAgainstAnyType);
+    const float FurthestDistanceFromCell = FJCVCellUtility::GetFurthestDistanceFromCell(Map, OriginCell, FeatureId, bAgainstAnyType);
     const float InvDistanceFromCell = 1.f / FMath::Max(FurthestDistanceFromCell, KINDA_SMALL_NUMBER);
 
     TFunctionRef<void(FJCVCell&)> CellCallback(

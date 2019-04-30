@@ -194,16 +194,16 @@ public:
     // Random Search
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="Traits"))
-    FJCVCellRef GetRandomCell(int32 Seed, const FJCVCellTraits& Traits);
+    FJCVCellRef GetRandomCell(int32 Seed, const FJCVCellTraitsRef& Traits);
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="Traits,FeatureId"))
-    FJCVCellRef GetRandomCellByFeature(int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits);
+    FJCVCellRef GetRandomCellByFeature(int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraitsRef& Traits);
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="Traits"))
-    void GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVCellTraits& Traits, int32 Count = 1);
+    void GetRandomCells(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVCellTraitsRef& Traits, int32 Count = 1);
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="Traits,FeatureId"))
-    void GetRandomCellsByFeature(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraits& Traits, int32 Count = 1);
+    void GetRandomCellsByFeature(TArray<FJCVCellRef>& CellRefs, int32 Seed, const FJCVFeatureId& FeatureId, const FJCVCellTraitsRef& Traits, int32 Count = 1);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     TArray<int32> GetRandomCellWithinFeature(uint8 FeatureType, int32 CellCount, int32 Seed, bool bAllowBorders = false, int32 MinCellDistance = 0);
@@ -321,7 +321,7 @@ public:
     int32 GetFeatureCellCount(FJCVFeatureId FeatureId) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void GetFeaturePoints(TArray<FVector2D>& PointGroup, FJCVFeatureId FeatureId);
+    void GetFeaturePoints(TArray<FVector2D>& Points, FJCVFeatureId FeatureId);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void GetFeatureCells(TArray<FJCVCellRef>& CellRefs, FJCVFeatureId FeatureId);

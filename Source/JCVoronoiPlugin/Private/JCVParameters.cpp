@@ -28,10 +28,10 @@
 #include "JCVParameters.h"
 #include "JCVDiagramMap.h"
 
-FJCVCellTraits::FJCVCellTraits(const FFilterCallback& InFilterCallback)
-    : FilterCallback(InFilterCallback)
-{
-}
+//FJCVCellTraitsRef::FJCVCellTraitsRef(const FFilterCallback& InFilterCallback)
+//    : FilterCallback(InFilterCallback)
+//{
+//}
 
 //bool FJCVCellTraits_Deprecated::HasValidFeature(const FJCVCell& c) const
 //{
@@ -76,97 +76,100 @@ void FJCVCellDetailsRef::Set(const FJCVCell* InCell)
     }
 }
 
+// Traits
+
+bool FJCVFeatureTraits::HasMatchingTraits(const FJCVCell& Cell) const
+{
+    return Cell.IsType(FeatureId.Type, FeatureId.Index);
+}
+
+bool FJCVValueTraits::HasMatchingTraits(const FJCVCell& Cell) const
+{
+    return Cell.Value >= ValueLo && Cell.Value <= ValueHi;
+}
+
+bool FJCVPointRadiusTraits::HasMatchingTraits(const FJCVCell& Cell) const
+{
+    return (Origin-Cell.ToVector2D()).SizeSquared() < (Radius*Radius);
+}
+
+// Traits Generator
+
+void FJCVPointRadiusTraitsGenerator::GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FPSJCVCellTraits& Traits) const
+{
+    FJCVPointRadiusTraits* NewTraits(new FJCVPointRadiusTraits);
+    NewTraits->Origin = Cell.ToVector2D();
+    NewTraits->Radius = Radius;
+    Traits = MakeShareable(NewTraits);
+}
+
+void FJCVFeatureDistanceTraitsGenerator::GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FPSJCVCellTraits& Traits) const
+{
+    FJCVPointRadiusTraits* NewTraits(new FJCVPointRadiusTraits);
+    float Dist = FJCVCellUtility::GetClosestDistanceFromCell(Map, Cell, FeatureId, false);
+    float DistScale = DistanceScale;
+    DistScale -= DistScale * DistanceScaleRandom * RandomStream.GetFraction();
+    NewTraits->Origin = Cell.ToVector2D();
+    NewTraits->Radius = Dist * DistScale;
+    Traits = MakeShareable(NewTraits);
+}
+
+// Traits (Blueprint)
+
 void UJCVTraitsLibrary::K2_CreateFeatureTraits(
-    FJCVCellTraits& Traits,
-    const FJCVCellTraits& SubTraits,
-    const FJCVFeatureId& FeatureId,
-    bool bInvertResult
+    FJCVCellTraitsRef& Traits,
+    const FJCVCellTraitsRef& SubTraits,
+    FJCVFeatureId FeatureId
     )
 {
-    CreateFeatureTraits(
-        Traits,
-        FeatureId,
-        bInvertResult,
-        SubTraits.GetCallbackRef()
-        );
+    FJCVFeatureTraits* NewTraits(new FJCVFeatureTraits);
+    NewTraits->FeatureId = FeatureId;
+    Traits.Traits = FPSJCVCellTraits(NewTraits);
+    Traits.SubTraits = SubTraits.Traits;
 }
 
 void UJCVTraitsLibrary::K2_CreateValueTraits(
-    FJCVCellTraits& Traits,
-    const FJCVCellTraits& SubTraits,
+    FJCVCellTraitsRef& Traits,
+    const FJCVCellTraitsRef& SubTraits,
     float ValueLo,
-    float ValueHi,
-    bool bInvertResult
+    float ValueHi
     )
 {
-    CreateValueTraits(
-        Traits,
-        ValueLo,
-        ValueHi,
-        bInvertResult,
-        SubTraits.GetCallbackRef()
-        );
+    FJCVValueTraits* NewTraits(new FJCVValueTraits);
+    NewTraits->ValueLo = ValueLo;
+    NewTraits->ValueHi = ValueHi;
+    Traits.Traits = FPSJCVCellTraits(NewTraits);
+    Traits.SubTraits = SubTraits.Traits;
 }
 
-void UJCVTraitsLibrary::CreateFeatureTraits(
-    FJCVCellTraits& Traits,
+void UJCVTraitsLibrary::K2_CreatePointRadiusTraits(
+    FJCVCellTraitsRef& Traits,
+    const FJCVCellTraitsRef& SubTraits,
+    FVector2D Origin,
+    float Radius
+    )
+{
+    FJCVPointRadiusTraits* NewTraits(new FJCVPointRadiusTraits);
+    NewTraits->Origin = Origin;
+    NewTraits->Radius = Radius;
+    Traits.Traits = FPSJCVCellTraits(NewTraits);
+    Traits.SubTraits = SubTraits.Traits;
+}
+
+void UJCVTraitsLibrary::K2_CreateFeatureDistanceTraitsGenerator(
+    FJCVCellTraitsGeneratorRef& GeneratorRef,
+    const FJCVCellTraitsGeneratorRef& SubGeneratorRef,
+    int32 Seed,
     FJCVFeatureId FeatureId,
-    bool bInvertResult,
-    const FJCVCellTraits::FFilterCallback* SubCallbackRef
+    float DistanceScale,
+    float DistanceScaleRandom
     )
 {
-    bool bIsSubCallbackValid = SubCallbackRef && !!(*SubCallbackRef);
-    if (bIsSubCallbackValid)
-    {
-        FJCVCellTraits::FFilterCallback SubCallback(*SubCallbackRef);
-        Traits.FilterCallback =
-            [SubCallback,FeatureId,bInvertResult](const FJCVCell& Cell)
-            {
-                bool bResult;
-                bResult = Cell.IsType(FeatureId.Type, FeatureId.Index);
-                bResult = bResult && SubCallback(Cell);
-                return bInvertResult ? !bResult : bResult;
-            };
-    }
-    else
-    {
-        Traits.FilterCallback =
-            [FeatureId,bInvertResult](const FJCVCell& Cell)
-            {
-                bool bResult = Cell.IsType(FeatureId.Type, FeatureId.Index);
-                return bInvertResult ? !bResult : bResult;
-            };
-    }
-}
-
-void UJCVTraitsLibrary::CreateValueTraits(
-    FJCVCellTraits& Traits,
-    float ValueLo,
-    float ValueHi,
-    bool bInvertResult,
-    const FJCVCellTraits::FFilterCallback* SubCallbackRef
-    )
-{
-    bool bIsSubCallbackValid = SubCallbackRef && !!(*SubCallbackRef);
-    if (bIsSubCallbackValid)
-    {
-        FJCVCellTraits::FFilterCallback SubCallback(*SubCallbackRef);
-        Traits.FilterCallback =
-            [SubCallback,ValueLo,ValueHi,bInvertResult](const FJCVCell& Cell)
-            {
-                bool bResult;
-                bResult = Cell.Value >= ValueLo && Cell.Value <= ValueHi;
-                bResult = bResult && SubCallback(Cell);
-                return bInvertResult ? !bResult : bResult;
-            };
-    }
-    else
-    {
-        Traits.FilterCallback =
-            [ValueLo,ValueHi,bInvertResult](const FJCVCell& Cell)
-            {
-                bool bResult = Cell.Value >= ValueLo && Cell.Value <= ValueHi;
-                return bInvertResult ? !bResult : bResult;
-            };
-    }
+    FJCVFeatureDistanceTraitsGenerator* Generator(new FJCVFeatureDistanceTraitsGenerator);
+    Generator->RandomStream = FRandomStream(Seed);
+    Generator->FeatureId = FeatureId;
+    Generator->DistanceScale = DistanceScale;
+    Generator->DistanceScaleRandom = DistanceScaleRandom;
+    GeneratorRef.Generator = MakeShareable(Generator);
+    GeneratorRef.SubGenerator = SubGeneratorRef.Generator;
 }

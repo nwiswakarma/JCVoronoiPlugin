@@ -26,6 +26,10 @@
 // 
 
 #include "JCVFeatureUtility.h"
+#include "JCVCellUtility.h"
+#include "JCVDiagramMap.h"
+
+// Visit Utility
 
 void FJCVFeatureUtility::PointFillVisit(
     FJCVDiagramMap& Map,
@@ -210,6 +214,8 @@ void FJCVFeatureUtility::ExpandFeatureFromCellGroups(
 
     ExpandVisit(Map, ExpandCount, OriginCells, VisitCallback);
 }
+
+// Feature Segments
 
 void FJCVFeatureUtility::GenerateSegmentExpands(
     FJCVDiagramMap& Map,
@@ -500,6 +506,94 @@ void FJCVFeatureUtility::PointFillSubdivideFeatures(
     }
 }
 
+// Depth Map Utility
+
+void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, const FJCVFeatureId& FeatureId)
+{
+    const uint8 FeatureType = FeatureId.Type;
+    const int32 FeatureIndex = FeatureId.Index;
+
+    // Make sure target feature type have any cells
+    if ((FeatureIndex >= 0 && ! SrcMap.HasCells(FeatureType, FeatureIndex)) || ! SrcMap.HasCells(FeatureType))
+    {
+        return;
+    }
+
+    check(SrcMap.Num() == DstMap.Num());
+
+    // Clear target map features
+    DstMap.ClearFeatures();
+
+    // Feature type cell group indices to evaluate
+    TArray<int32> FeatureIndices;
+    SrcMap.GetFeatureIndices(FeatureIndices, FeatureType, FeatureIndex, true);
+
+    for (int32 i=0; i<FeatureIndices.Num(); ++i)
+    {
+        const int32 CurFeatureIndex = FeatureIndices[i];
+        const int32 DepthFeatureType = i+1;
+
+        FJCVConstCellSet VisitedCellSet;
+        FJCVConstCellSet PrevCellSet;
+        FJCVConstCellSet CurCellSet;
+
+        // Find feature border cells to use as initial cells to evaluate
+        SrcMap.GetBorderCells(CurCellSet, FeatureType, -1, CurFeatureIndex, true, true);
+
+        VisitedCellSet = CurCellSet;
+        PrevCellSet = CurCellSet;
+
+        int32 VisitedCellCount = 0;
+
+        // Callback for every visited cells
+        TFunctionRef<void(const FJCVCell*)> VisitCallback(
+            [&](const FJCVCell* Cell)
+            {
+                check(Cell != nullptr);
+
+                if (Cell->IsType(FeatureType, CurFeatureIndex) && ! VisitedCellSet.Contains(Cell))
+                {
+                    CurCellSet.Emplace(Cell);
+                }
+            } );
+
+        // Set border cells as lowest depth feature
+        for (const FJCVCell* Cell : CurCellSet)
+        {
+            FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
+            DstCell.SetType(DepthFeatureType, 0);
+        }
+
+        int32 Depth = 1;
+
+        while (PrevCellSet.Num() > 0)
+        {
+            CurCellSet.Reset();
+
+            for (const FJCVCell* Cell : PrevCellSet)
+            {
+                check(Cell != nullptr);
+                SrcMap.VisitNeighbours(*Cell, VisitCallback);
+            }
+
+            VisitedCellSet.Append(CurCellSet);
+            PrevCellSet = CurCellSet;
+
+            for (const FJCVCell* Cell : CurCellSet)
+            {
+                FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
+                DstCell.SetType(DepthFeatureType, Depth);
+            }
+
+            ++Depth;
+        }
+    }
+
+    DstMap.GroupByFeatures();
+}
+
+// Cell Query
+
 void FJCVFeatureUtility::GetRandomCellWithinFeature(
     FJCVCellGroup& OutCells,
     FJCVDiagramMap& Map,
@@ -620,88 +714,29 @@ void FJCVFeatureUtility::GetRandomCellWithinFeature(
     }
 }
 
-void FJCVFeatureUtility::GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, uint8 FeatureType, int32 FeatureIndex)
+void FJCVFeatureUtility::GetFeatureCellGroups(
+    FJCVDiagramMap& Map,
+    const TArray<FJCVFeatureId> FeatureIds,
+    TArray<FJCVCellGroup>& OutCellGroups
+    )
 {
-    // Make sure target feature type have any cells
-    if ((FeatureIndex >= 0 && ! SrcMap.HasCells(FeatureType, FeatureIndex)) || ! SrcMap.HasCells(FeatureType))
+    OutCellGroups.SetNum(FeatureIds.Num());
+
+    for (int32 i=0; i<FeatureIds.Num(); ++i)
     {
-        return;
-    }
+        const FJCVFeatureId& FeatureId(FeatureIds[i]);
+        FJCVCellGroup* CellGroup = Map.GetFeatureCellGroup(FeatureId);
 
-    check(SrcMap.Num() == DstMap.Num());
-
-    // Clear target map features
-    DstMap.ClearFeatures();
-
-    // Feature type cell group indices to evaluate
-    TArray<int32> FeatureIndices;
-    SrcMap.GetFeatureIndices(FeatureIndices, FeatureType, FeatureIndex, true);
-
-    for (int32 i=0; i<FeatureIndices.Num(); ++i)
-    {
-        const int32 CurFeatureIndex = FeatureIndices[i];
-        const int32 DepthFeatureType = i+1;
-
-        FJCVConstCellSet VisitedCellSet;
-        FJCVConstCellSet PrevCellSet;
-        FJCVConstCellSet CurCellSet;
-
-        // Find feature border cells to use as initial cells to evaluate
-        SrcMap.GetBorderCells(CurCellSet, FeatureType, -1, CurFeatureIndex, true, true);
-
-        VisitedCellSet = CurCellSet;
-        PrevCellSet = CurCellSet;
-
-        int32 VisitedCellCount = 0;
-
-        // Callback for every visited cells
-        TFunctionRef<void(const FJCVCell*)> VisitCallback(
-            [&](const FJCVCell* Cell)
-            {
-                check(Cell != nullptr);
-
-                if (Cell->IsType(FeatureType, CurFeatureIndex) && ! VisitedCellSet.Contains(Cell))
-                {
-                    CurCellSet.Emplace(Cell);
-                }
-            } );
-
-        // Set border cells as lowest depth feature
-        for (const FJCVCell* Cell : CurCellSet)
+        if (CellGroup)
         {
-            FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
-            DstCell.SetType(DepthFeatureType, 0);
-        }
-
-        int32 Depth = 1;
-
-        while (PrevCellSet.Num() > 0)
-        {
-            CurCellSet.Reset();
-
-            for (const FJCVCell* Cell : PrevCellSet)
-            {
-                check(Cell != nullptr);
-                SrcMap.VisitNeighbours(*Cell, VisitCallback);
-            }
-
-            VisitedCellSet.Append(CurCellSet);
-            PrevCellSet = CurCellSet;
-
-            for (const FJCVCell* Cell : CurCellSet)
-            {
-                FJCVCell& DstCell(DstMap.GetCell(Cell->GetIndex()));
-                DstCell.SetType(DepthFeatureType, Depth);
-            }
-
-            ++Depth;
+            OutCellGroups[i] = *CellGroup;
         }
     }
-
-    DstMap.GroupByFeatures();
 }
 
-void UJCVFeatureUtility::GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId)
+// Blueprint Functions
+
+void UJCVFeatureUtility::K2_GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId)
 {
     if (! IsValid(SrcAccessor))
     {
@@ -737,92 +772,263 @@ void UJCVFeatureUtility::GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCV
         return;
     }
 
-    FJCVFeatureUtility::GenerateDepthMap(SrcMap, DstMap, FeatureId.Type, FeatureId.Index);
+    FJCVFeatureUtility::GenerateDepthMap(SrcMap, DstMap, FeatureId);
 }
 
-FJCVCellRef UJCVFeatureUtility::FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex)
+//FJCVCellRef UJCVFeatureUtility::FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex)
+//{
+//    if (! IsValid(Accessor))
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR"));
+//        return FJCVCellRef();
+//    }
+//
+//    if (! Accessor->HasValidMap())
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR MAP"));
+//        return FJCVCellRef();
+//    }
+//
+//    FJCVDiagramMap& Map(Accessor->GetMap());
+//
+//    if (! Map.HasFeature(FeatureType))
+//    {
+//        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID FEATURE TYPE"));
+//        return FJCVCellRef();
+//    }
+//
+//    FJCVFeatureGroup& FeatureGroup(*Map.GetFeatureGroup(FeatureType));
+//
+//    FRandomStream Rand(Seed);
+//    const int32 GroupCount = FeatureGroup.GetGroupCount();
+//    const int32 Index0 = FMath::Clamp(FromIndex, 0, GroupCount-1);
+//    const int32 Index1 = FMath::Clamp(ToIndex  , 0, GroupCount-1);
+//
+//    TArray<int32> FeatureIndices;
+//
+//    if (FromIndex <= ToIndex)
+//    {
+//        for (int32 i=Index0; i<=Index1; ++i)
+//        {
+//            FeatureIndices.Emplace(i);
+//        }
+//    }
+//    else
+//    {
+//        for (int32 i=Index0; i>=Index1; --i)
+//        {
+//            FeatureIndices.Emplace(i);
+//        }
+//    }
+//
+//    const float RadiusSq = Radius * Radius;
+//    FJCVCellRef CellResult;
+//
+//    for (int32 FeatureIndex : FeatureIndices)
+//    {
+//        FJCVCellGroup CellGroup(FeatureGroup.CellGroups[FeatureIndex]);
+//        int32 CellCount = CellGroup.Num();
+//
+//        // Shuffle cell group copy
+//		for (int32 i=0; i<CellCount; ++i)
+//		{
+//			int32 SwapIndex = Rand.RandHelper(CellCount);
+//
+//			if (i != SwapIndex)
+//			{
+//                CellGroup.Swap(i, SwapIndex);
+//			}
+//		}
+//
+//        // Find cell outside of point radius
+//        for (const FJCVCell* Cell : CellGroup)
+//        {
+//            FVector2D CellOrigin(Cell->ToVector2DUnsafe());
+//            float CellDistSq = (Origin-CellOrigin).SizeSquared();
+//
+//            if (CellDistSq > RadiusSq)
+//            {
+//                CellResult = FJCVCellRef(Cell);
+//                break;
+//            }
+//        }
+//
+//        if (CellResult.HasValidCell())
+//        {
+//            break;
+//        }
+//    }
+//
+//    return CellResult;
+//}
+
+void UJCVFeatureUtility::GetCellsFromFeatures(UJCVDiagramAccessor* Accessor, const TArray<FJCVFeatureId>& FeatureIds, TArray<FJCVCellRefGroup>& CellRefGroups)
 {
     if (! IsValid(Accessor))
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR"));
-        return FJCVCellRef();
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GetCellsFromFeatures() ABORTED, INVALID ACCESSOR"));
+        return;
     }
-
+    else
     if (! Accessor->HasValidMap())
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID ACCESSOR MAP"));
-        return FJCVCellRef();
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GetCellsFromFeatures() ABORTED, INVALID ACCESSOR MAP"));
+        return;
     }
 
     FJCVDiagramMap& Map(Accessor->GetMap());
+    CellRefGroups.SetNum(FeatureIds.Num());
 
-    if (! Map.HasFeatureType(FeatureType))
+    for (int32 i=0; i<FeatureIds.Num(); ++i)
     {
-        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::FindDepthMapCellOutsideRadius() ABORTED, INVALID FEATURE TYPE"));
-        return FJCVCellRef();
+        const FJCVFeatureId& FeatureId(FeatureIds[i]);
+        TArray<FJCVCellRef>& CellRefs(CellRefGroups[i].Data);
+
+        FJCVCellGroup* CellGroupPtr = Map.GetFeatureCellGroup(FeatureId);
+
+        if (! CellGroupPtr)
+        {
+            continue;
+        }
+
+        FJCVCellGroup& CellGroup(*CellGroupPtr);
+
+        for (FJCVCell* Cell : CellGroup)
+        {
+            CellRefs.Emplace(Cell);
+        }
+    }
+}
+
+void UJCVFeatureUtility::GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge(
+    UJCVDiagramAccessor* Accessor,
+    int32 Seed,
+    const TArray<FJCVFeatureId>& FeatureIds,
+    TArray<FJCVCellRef>& OutCellRefs,
+    TArray<float>& OutDistances,
+    float FilterDistanceRatio,
+    float FilterDistanceRatioRandom
+    )
+{
+    if (! IsValid(Accessor))
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge() ABORTED, INVALID ACCESSOR"));
+        return;
+    }
+    else
+    if (! Accessor->HasValidMap())
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVFeatureUtility::GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge() ABORTED, INVALID ACCESSOR MAP"));
+        return;
     }
 
-    FJCVFeatureGroup& FeatureGroup(*Map.GetFeatureGroup(FeatureType));
-
+    FJCVDiagramMap& Map(Accessor->GetMap());
     FRandomStream Rand(Seed);
-    const int32 GroupCount = FeatureGroup.GetGroupCount();
-    const int32 Index0 = FMath::Clamp(FromIndex, 0, GroupCount-1);
-    const int32 Index1 = FMath::Clamp(ToIndex  , 0, GroupCount-1);
 
-    TArray<int32> FeatureIndices;
+    // Generate cell candidates
+    TArray<FJCVCellGroup> FeatureCellGroups;
+    FJCVFeatureUtility::GetFeatureCellGroups(Map, FeatureIds, FeatureCellGroups);
 
-    if (FromIndex <= ToIndex)
+    // Valid cell container
+    TArray<FJCVCell*> ValidCells;
+
+    for (int32 i=0; i<FeatureIds.Num(); ++i)
     {
-        for (int32 i=Index0; i<=Index1; ++i)
+        FJCVCellGroup& FeatureCells(FeatureCellGroups[i]);
+
+        while (FeatureCells.Num() > 0)
         {
-            FeatureIndices.Emplace(i);
+            int32 RandIndex = Rand.RandHelper(FeatureCells.Num());
+            FJCVCell* RandCell = FeatureCells[RandIndex];
+            FVector2D RandCellPos = RandCell->ToVector2DUnsafe();
+
+            FeatureCells.RemoveAtSwap(RandIndex, 1, false);
+
+            check(RandCell != nullptr);
+
+            // Get distance from edge
+
+            float DistanceToEdgeSq = FJCVCellUtility::GetClosestDistanceFromCellSq(
+                Map,
+                *RandCell,
+                FJCVFeatureId(0, -1),
+                false
+                );
+
+            // Filter all cells within distance
+
+            float FilterDistanceSq = DistanceToEdgeSq * FilterDistanceRatio;
+            FilterDistanceSq -= FilterDistanceSq * FilterDistanceRatioRandom * Rand.GetFraction();
+
+            // Iterate through feature cell groups to filter cells by distance
+            for (int32 j=i; j<FeatureIds.Num(); ++j)
+            {
+                FJCVCellGroup& FilterCells(FeatureCellGroups[j]);
+                int32 FilterIt = 0;
+
+                // Remove all cells within filter distance
+                while (FilterIt < FilterCells.Num())
+                {
+                    FJCVCell* FilterCell = FilterCells[FilterIt];
+                    check(FilterCell != nullptr);
+
+                    FVector2D FilterCellPos(FilterCell->ToVector2DUnsafe());
+                    float DistToFilterSq = (FilterCellPos-RandCellPos).SizeSquared();
+
+                    if (DistToFilterSq < FilterDistanceSq)
+                    {
+                        FilterCells.RemoveAtSwap(FilterIt, 1, false);
+                        continue;
+                    }
+
+                    ++FilterIt;
+                }
+            }
+
+            // Generate output cell ref and distance to edge
+
+            OutCellRefs.Emplace(RandCell);
+            OutDistances.Emplace(FMath::Sqrt(DistanceToEdgeSq));
+        }
+    }
+}
+
+void UJCVFeatureUtility::GetRandomCellsFromDepthFeatureRangeByDistanceFromEdge(
+    UJCVDiagramAccessor* Accessor,
+    int32 Seed,
+    uint8 FeatureType,
+    int32 FeatureIndexStart,
+    int32 FeatureIndexEnd,
+    TArray<FJCVCellRef>& OutCellRefs,
+    TArray<float>& OutDistances,
+    float FilterDistanceRatio,
+    float FilterDistanceRatioRandom
+    )
+{
+    TArray<FJCVFeatureId> FeatureIds;
+
+    if (FeatureIndexStart <= FeatureIndexEnd)
+    {
+        for (int32 i=FeatureIndexStart; i<=FeatureIndexEnd; ++i)
+        {
+            FeatureIds.Emplace(FeatureType, i);
         }
     }
     else
     {
-        for (int32 i=Index0; i>=Index1; --i)
+        for (int32 i=FeatureIndexStart; i>=FeatureIndexEnd; --i)
         {
-            FeatureIndices.Emplace(i);
+            FeatureIds.Emplace(FeatureType, i);
         }
     }
 
-    const float RadiusSq = Radius * Radius;
-    FJCVCellRef CellResult;
-
-    for (int32 FeatureIndex : FeatureIndices)
-    {
-        FJCVCellGroup CellGroup(FeatureGroup.CellGroups[FeatureIndex]);
-        int32 CellCount = CellGroup.Num();
-
-        // Shuffle cell group copy
-		for (int32 i=0; i<CellCount; ++i)
-		{
-			int32 SwapIndex = Rand.RandHelper(CellCount);
-
-			if (i != SwapIndex)
-			{
-                CellGroup.Swap(i, SwapIndex);
-			}
-		}
-
-        // Find cell outside of point radius
-        for (const FJCVCell* Cell : CellGroup)
-        {
-            FVector2D CellOrigin(Cell->ToVector2DUnsafe());
-            float CellDistSq = (Origin-CellOrigin).SizeSquared();
-
-            if (CellDistSq > RadiusSq)
-            {
-                CellResult = FJCVCellRef(Cell);
-                break;
-            }
-        }
-
-        if (CellResult.HasValidCell())
-        {
-            break;
-        }
-    }
-
-    return CellResult;
+    GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge(
+        Accessor,
+        Seed,
+        FeatureIds,
+        OutCellRefs,
+        OutDistances,
+        FilterDistanceRatio,
+        FilterDistanceRatioRandom
+        );
 }

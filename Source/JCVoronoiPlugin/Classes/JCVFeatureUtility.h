@@ -29,16 +29,18 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "JCVTypes.h"
 #include "JCVParameters.h"
 #include "JCVDiagramAccessor.h"
 #include "JCVFeatureUtility.generated.h"
 
+class FJCVDiagramMap;
 class UJCVDiagramAccessor;
 
 class FJCVFeatureUtility
 {
 public:
+
+    // Visit Utility
 
     static void PointFillVisit(
         FJCVDiagramMap& Map,
@@ -68,6 +70,8 @@ public:
         const FJCVFeatureId& FeatureId,
         int32 ExpandCount
         );
+
+    // Feature Segments
 
     static void GenerateSegmentExpands(
         FJCVDiagramMap& Map,
@@ -100,6 +104,12 @@ public:
         FRandomStream& Rand
         );
 
+    // Depth Map Utility
+
+    static void GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, const FJCVFeatureId& FeatureId);
+
+    // Cell Query
+
     static void GetRandomCellWithinFeature(
         FJCVCellGroup& OutCells,
         FJCVDiagramMap& Map,
@@ -110,7 +120,11 @@ public:
         int32 MinCellDistance = 0
         );
 
-    static void GenerateDepthMap(FJCVDiagramMap& SrcMap, FJCVDiagramMap& DstMap, uint8 FeatureType, int32 FeatureIndex);
+    static void GetFeatureCellGroups(
+        FJCVDiagramMap& Map,
+        const TArray<FJCVFeatureId> FeatureIds,
+        TArray<FJCVCellGroup>& OutCellGroups
+        );
 };
 
 UCLASS()
@@ -120,9 +134,36 @@ class UJCVFeatureUtility : public UBlueprintFunctionLibrary
 
 public:
 
-    UFUNCTION(BlueprintCallable, Category="JCV")
-    static void GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId);
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="GenerateDepthMap"))
+    static void K2_GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId);
+
+    //UFUNCTION(BlueprintCallable, Category="JCV")
+    //static FJCVCellRef FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    static FJCVCellRef FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex);
+    static void GetCellsFromFeatures(UJCVDiagramAccessor* Accessor, const TArray<FJCVFeatureId>& FeatureIds, TArray<FJCVCellRefGroup>& CellRefGroups);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    static void GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge(
+        UJCVDiagramAccessor* Accessor,
+        int32 Seed,
+        const TArray<FJCVFeatureId>& FeatureIds,
+        TArray<FJCVCellRef>& OutCellRefs,
+        TArray<float>& OutDistances,
+        float FilterDistanceRatio = 1.f,
+        float FilterDistanceRatioRandom = 0.f
+        );
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    static void GetRandomCellsFromDepthFeatureRangeByDistanceFromEdge(
+        UJCVDiagramAccessor* Accessor,
+        int32 Seed,
+        uint8 FeatureType,
+        int32 FeatureIndexStart,
+        int32 FeatureIndexEnd,
+        TArray<FJCVCellRef>& OutCellRefs,
+        TArray<float>& OutDistances,
+        float FilterDistanceRatio = 1.f,
+        float FilterDistanceRatioRandom = 0.f
+        );
 };

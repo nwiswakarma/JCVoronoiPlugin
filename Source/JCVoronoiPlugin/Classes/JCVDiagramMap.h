@@ -27,13 +27,10 @@
 
 #pragma once
 
-#include "SharedPointer.h"
-#include "UnrealMathUtility.h"
-#include "UnrealMemory.h"
-#include "Queue.h"
-#include "Set.h"
+#include "CoreMinimal.h"
 
 #include "JCVDiagram.h"
+#include "JCVParameters.h"
 
 class FJCVDiagramMapContext;
 class FJCVDiagramMap;
@@ -346,6 +343,11 @@ struct FJCVFeatureGroup
         return GetCellCount(FeatureIndex) > 0;
     }
 
+    FJCVCellGroup* GetCellGroup(int32 FeatureIndex)
+    {
+        return IsValidIndex(FeatureIndex) ? &CellGroups[FeatureIndex] : nullptr;
+    }
+
     template<class FCellContainer>
     void GetCells(FCellContainer& OutCells, const bool bClearOutput = true) const
     {
@@ -524,7 +526,7 @@ public:
     void VisitFeatureCells(const FCallback& Callback, uint8 FeatureType, int32 FeatureIndex = -1)
     {
         // Invalid feature type, abort
-        if (! HasFeatureType(FeatureType))
+        if (! HasFeature(FeatureType))
         {
             return;
         }
@@ -624,7 +626,7 @@ public:
         return FeatureGroups.Num();
     }
 
-    FORCEINLINE bool HasFeatureType(int32 FeatureType) const
+    FORCEINLINE bool HasFeature(int32 FeatureType) const
     {
         return FeatureGroups.IsValidIndex(FeatureType);
     }
@@ -650,16 +652,16 @@ public:
             : 0;
     }
 
-    FORCEINLINE FJCVCellGroup* GetCellsByFeature(uint8 Type, int32 Index)
+    FORCEINLINE FJCVCellGroup* GetFeatureCellGroup(uint8 Type, int32 Index)
     {
-        if (FeatureGroups.IsValidIndex(Type))
-        {
-            if (FeatureGroups[Type].CellGroups.IsValidIndex(Index))
-            {
-                return &FeatureGroups[Type].CellGroups[Index];
-            }
-        }
-        return nullptr;
+        return FeatureGroups.IsValidIndex(Type)
+            ? FeatureGroups[Type].GetCellGroup(Index)
+            : nullptr;
+    }
+
+    FORCEINLINE FJCVCellGroup* GetFeatureCellGroup(const FJCVFeatureId& FeatureId)
+    {
+        return GetFeatureCellGroup(FeatureId.Type, FeatureId.Index);
     }
 
     void GetFeatureIndices(TArray<int32>& FeatureIndices, uint8 Type, int32 Index, bool bFilterEmpty = false) const
@@ -707,7 +709,7 @@ public:
         int32 i=0;
         do
         {
-            f = GetCellsByFeature(t0, i++);
+            f = GetFeatureCellGroup(t0, i++);
             if (f)
             {
                 g.Reserve(g.Num()+f->Num());
@@ -728,7 +730,7 @@ public:
             bool bAgainstAnyType = false
             )
     {
-        FJCVCellGroup* f = GetCellsByFeature(t0, fi);
+        FJCVCellGroup* f = GetFeatureCellGroup(t0, fi);
         if (f)
         {
             g.Reserve(f->Num());

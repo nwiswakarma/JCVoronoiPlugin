@@ -133,7 +133,7 @@ void FJCVDiagramMap::ResetFeatures(uint8 FeatureType, int32 FeatureIndex)
     }
     else
     {
-        FJCVCellGroup* f = GetCellsByFeature(FeatureType, FeatureIndex);
+        FJCVCellGroup* f = GetFeatureCellGroup(FeatureType, FeatureIndex);
         if (f)
         {
             const FJCVCellGroup& fg( *f );

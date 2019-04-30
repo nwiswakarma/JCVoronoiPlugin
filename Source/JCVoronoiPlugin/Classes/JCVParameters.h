@@ -32,9 +32,16 @@
 #include "JCVParameters.generated.h"
 
 class UJCVDiagramObject;
+class FJCVDiagramMap;
 struct FJCVCell;
+struct FJCVCellTraits;
+struct FJCVCellTraitsGenerator;
+struct FJCVCellTraitsRef;
 
-// Feature & Trait Parameters
+typedef TSharedPtr<FJCVCellTraits>          FPSJCVCellTraits;
+typedef TSharedPtr<FJCVCellTraitsGenerator> FPSJCVCellTraitsGenerator;
+
+// Feature ID
 
 USTRUCT(BlueprintType)
 struct JCVORONOIPLUGIN_API FJCVFeatureId
@@ -62,45 +69,89 @@ struct JCVORONOIPLUGIN_API FJCVFeatureId
     }
 };
 
-USTRUCT(BlueprintType, Blueprintable)
-struct JCVORONOIPLUGIN_API FJCVRadialFill
+// Traits
+
+struct JCVORONOIPLUGIN_API FJCVCellTraits
+{
+    FORCEINLINE bool HasMatchingTraits(const FJCVCell* Cell)
+    {
+        return Cell ? HasMatchingTraits(Cell) : false;
+    }
+
+    virtual bool HasMatchingTraits(const FJCVCell& Cell) const = 0;
+};
+
+struct JCVORONOIPLUGIN_API FJCVFeatureTraits : public FJCVCellTraits
+{
+    FJCVFeatureId FeatureId;
+
+    virtual bool HasMatchingTraits(const FJCVCell& Cell) const override;
+};
+
+struct JCVORONOIPLUGIN_API FJCVValueTraits : public FJCVCellTraits
+{
+    float ValueLo = 0.f;
+    float ValueHi = 1.f;
+
+    virtual bool HasMatchingTraits(const FJCVCell& Cell) const override;
+};
+
+struct JCVORONOIPLUGIN_API FJCVPointRadiusTraits : public FJCVCellTraits
+{
+    FVector2D Origin;
+    float Radius = 1.f;
+
+    virtual bool HasMatchingTraits(const FJCVCell& Cell) const override;
+};
+
+// Traits Generator
+
+struct JCVORONOIPLUGIN_API FJCVCellTraitsGenerator
+{
+    virtual void GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FPSJCVCellTraits& Traits) const = 0;
+};
+
+struct JCVORONOIPLUGIN_API FJCVPointRadiusTraitsGenerator : public FJCVCellTraitsGenerator
+{
+    float Radius;
+    float RadiusRandom;
+
+    virtual void GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FPSJCVCellTraits& Traits) const override;
+};
+
+struct JCVORONOIPLUGIN_API FJCVFeatureDistanceTraitsGenerator : public FJCVCellTraitsGenerator
+{
+    FRandomStream RandomStream;
+    FJCVFeatureId FeatureId;
+    float DistanceScale;
+    float DistanceScaleRandom;
+
+    virtual void GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FPSJCVCellTraits& Traits) const override;
+};
+
+// Traits & Traits Generator Ref
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellTraitsRef
 {
 	GENERATED_BODY()
 
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    float Value = .5f;
+    FPSJCVCellTraits Traits;
+    FPSJCVCellTraits SubTraits;
 
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    float Radius = .85f;
-
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    float Sharpness = 0.f;
-
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    UCurveFloat* ValueCurve = nullptr;
-
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    bool bRadialDegrade = true;
-
-	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
-    bool bFilterBorder = true;
-};
-
-USTRUCT(BlueprintType)
-struct JCVORONOIPLUGIN_API FJCVCellTraits
-{
-	GENERATED_USTRUCT_BODY()
-
-    typedef TFunction<bool(const FJCVCell&)> FFilterCallback;
-
-    FFilterCallback FilterCallback;
-
-    FJCVCellTraits() = default;
-    FJCVCellTraits(const FFilterCallback& InFilterCallback);
-
-    FORCEINLINE bool HasValidCallback() const
+    FORCEINLINE bool HasValidTraits() const
     {
-        return !!FilterCallback;
+        return Traits.IsValid();
+    }
+
+    FORCEINLINE bool HasValidSubTraits() const
+    {
+        return SubTraits.IsValid();
+    }
+
+    FORCEINLINE bool HasMatchingSubTraits(const FJCVCell& Cell) const
+    {
+        return ! HasValidSubTraits() || SubTraits->HasMatchingTraits(Cell);
     }
 
     FORCEINLINE bool HasMatchingTraits(const FJCVCell* Cell) const
@@ -110,12 +161,41 @@ struct JCVORONOIPLUGIN_API FJCVCellTraits
 
     FORCEINLINE bool HasMatchingTraits(const FJCVCell& Cell) const
     {
-        return HasValidCallback() ? FilterCallback(Cell) : true;
+        return HasMatchingSubTraits(Cell)
+            ? (HasValidTraits() ? Traits->HasMatchingTraits(Cell) : true)
+            : false;
+    }
+};
+
+USTRUCT(BlueprintType)
+struct JCVORONOIPLUGIN_API FJCVCellTraitsGeneratorRef
+{
+	GENERATED_BODY()
+
+    FPSJCVCellTraitsGenerator Generator;
+    FPSJCVCellTraitsGenerator SubGenerator;
+
+    FORCEINLINE bool HasValidGenerator() const
+    {
+        return Generator.IsValid();
     }
 
-    FORCEINLINE const FFilterCallback* GetCallbackRef() const
+    FORCEINLINE bool HasValidSubGenerator() const
     {
-        return HasValidCallback() ? &FilterCallback : nullptr;
+        return SubGenerator.IsValid();
+    }
+
+    void GenerateFromMapCell(FJCVDiagramMap& Map, const FJCVCell& Cell, FJCVCellTraitsRef& TraitsRef) const
+    {
+        if (HasValidGenerator())
+        {
+            if (HasValidSubGenerator())
+            {
+                SubGenerator->GenerateFromMapCell(Map, Cell, TraitsRef.SubTraits);
+            }
+
+            Generator->GenerateFromMapCell(Map, Cell, TraitsRef.Traits);
+        }
     }
 };
 
@@ -170,6 +250,8 @@ struct JCVORONOIPLUGIN_API FJCVCellTraits
 //    virtual bool HasValidFeature(const FJCVCell& c) const override;
 //};
 
+// Value Params
+
 USTRUCT(BlueprintType, Blueprintable)
 struct JCVORONOIPLUGIN_API FJCVOrogenParams
 {
@@ -186,6 +268,30 @@ struct JCVORONOIPLUGIN_API FJCVOrogenParams
 
 	UPROPERTY(Category = "JCV|Orogen Settings", BlueprintReadWrite, EditAnywhere)
     bool bDivergentAsConvergent = false;
+};
+
+USTRUCT(BlueprintType, Blueprintable)
+struct JCVORONOIPLUGIN_API FJCVRadialFill
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    float Value = .5f;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    float Radius = .85f;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    float Sharpness = 0.f;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    UCurveFloat* ValueCurve = nullptr;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    bool bRadialDegrade = true;
+
+	UPROPERTY(Category = "JCV|Radial Fill", BlueprintReadWrite, EditAnywhere)
+    bool bFilterBorder = true;
 };
 
 // Cell Types
@@ -368,35 +474,40 @@ class UJCVTraitsLibrary : public UBlueprintFunctionLibrary
 
 public:
 
-    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Feature Traits", AutoCreateRefTerm="SubTraits,FeatureId"))
+    // Traits
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Feature Traits", AutoCreateRefTerm="FeatureId,SubTraits"))
     static void K2_CreateFeatureTraits(
-        FJCVCellTraits& Traits,
-        const FJCVCellTraits& SubTraits,
-        const FJCVFeatureId& FeatureId,
-        bool bInvertResult = false
+        FJCVCellTraitsRef& Traits,
+        const FJCVCellTraitsRef& SubTraits,
+        FJCVFeatureId FeatureId
         );
 
     UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Value Traits", AutoCreateRefTerm="SubTraits"))
     static void K2_CreateValueTraits(
-        FJCVCellTraits& Traits,
-        const FJCVCellTraits& SubTraits,
+        FJCVCellTraitsRef& Traits,
+        const FJCVCellTraitsRef& SubTraits,
         float ValueLo = 0.f,
-        float ValueHi = 1.f,
-        bool bInvertResult = false
+        float ValueHi = 1.f
         );
 
-    static void CreateFeatureTraits(
-        FJCVCellTraits& Traits,
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Value Traits", AutoCreateRefTerm="SubTraits"))
+    static void K2_CreatePointRadiusTraits(
+        FJCVCellTraitsRef& Traits,
+        const FJCVCellTraitsRef& SubTraits,
+        FVector2D Origin,
+        float Radius = 1.f
+        );
+
+    // Traits Generator
+
+    UFUNCTION(BlueprintCallable, BlueprintPure, Category="JCV", meta=(DisplayName="Create Value Traits", AutoCreateRefTerm="SubTraits"))
+    static void K2_CreateFeatureDistanceTraitsGenerator(
+        FJCVCellTraitsGeneratorRef& GeneratorRef,
+        const FJCVCellTraitsGeneratorRef& SubGeneratorRef,
+        int32 Seed,
         FJCVFeatureId FeatureId,
-        bool bInvertResult = false,
-        const FJCVCellTraits::FFilterCallback* SubCallbackRef = nullptr
-        );
-
-    static void CreateValueTraits(
-        FJCVCellTraits& Traits,
-        float ValueLo = 0.f,
-        float ValueHi = 1.f,
-        bool bInvertResult = false,
-        const FJCVCellTraits::FFilterCallback* SubCallbackRef = nullptr
+        float DistanceScale = 1.f,
+        float DistanceScaleRandom = 0.f
         );
 };
