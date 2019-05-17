@@ -2867,29 +2867,48 @@ void UJCVDiagramAccessor::GenerateDualGeometryByFeature(FJCVDualGeometry& Geomet
         CellIndices.Reset();
     }
 
+    // Visit cells
+
+    //TSet<FIntPoint> VisitedPointSet;
+    TMap<int32, int32> CenterCellIndexMap;
+    TMap<int32, int32> CellIndexMap;
+
+    // Reserve containers
+
     Points.Reserve(CellCount);
     PolyIndices.Reserve(CellCount * 3 * 8);
     CellIndices.Reserve(CellCount);
-
-    // Visit cells
-
-    TSet<FIntPoint> VisitedPointSet;
-    TMap<int32, int32> CellIndexMap;
+    CenterCellIndexMap.Reserve(CellCount / 2);
 
     TFunctionRef<void(const FJCVPoint&, const FJCVCell&, const FJCVCell&, const FJCVCell&)> CallbackDual(
-        [&](const FJCVPoint& Point, const FJCVCell& c0, const FJCVCell& c1, const FJCVCell& c2)
+        [&](const FJCVPoint& Point,
+            const FJCVCell& CenterCell,
+            const FJCVCell& NeighbourCell0,
+            const FJCVCell& NeighbourCell1
+            )
         {
-            GetPointDualGeometry(
-                VisitedPointSet,
-                CellIndexMap,
-                Points,
-                PolyIndices,
-                CellIndices,
-                Point,
-                c2,
-                c1,
-                c0
-                );
+            int32 CenterCellIndex = CenterCell.GetIndex();
+            int32 CenterVertIndex;
+
+            if (CenterCellIndexMap.Contains(CenterCellIndex))
+            {
+                CenterVertIndex = CenterCellIndexMap.FindChecked(CenterCellIndex);
+            }
+            else
+            {
+                CenterVertIndex = Points.Num();
+                CenterCellIndexMap.Emplace(CenterCellIndex, CenterVertIndex);
+                Points.Emplace(CenterCell.ToVector2D(), CenterCell.Value);
+            }
+
+            int32 IndexOffset = Points.Num();
+
+            Points.Emplace(NeighbourCell0.ToVector2D(), NeighbourCell0.Value);
+            Points.Emplace(NeighbourCell1.ToVector2D(), NeighbourCell1.Value);
+
+            PolyIndices.Emplace(CenterVertIndex);
+            PolyIndices.Emplace(IndexOffset  );
+            PolyIndices.Emplace(IndexOffset+1);
         } );
 
     for (const int32 fi : FeatureIndices)
@@ -3022,6 +3041,30 @@ void UJCVDiagramAccessor::GeneratePolyGeometryByFeature(UPARAM(ref) FJCVPolyGeom
 }
 
 void UJCVDiagramAccessor::GetPointDualGeometry(
+    TMap<int32, int32>& CellIndexMap,
+    TArray<FVector>& Points,
+    TArray<int32>& PolyIndices,
+    TArray<int32>& CellIndices,
+    const FJCVPoint& Point,
+    const FJCVCell& Cell0,
+    const FJCVCell& Cell1,
+    const FJCVCell& Cell2
+    ) const
+{
+    int32 i0 = Points.Num();
+    int32 i1 = i0 + 1;
+    int32 i2 = i0 + 2;
+
+    Points.Emplace(Cell0.ToVector2D(), Cell0.Value);
+    Points.Emplace(Cell1.ToVector2D(), Cell1.Value);
+    Points.Emplace(Cell2.ToVector2D(), Cell2.Value);
+
+    PolyIndices.Emplace(i0);
+    PolyIndices.Emplace(i1);
+    PolyIndices.Emplace(i2);
+}
+
+void UJCVDiagramAccessor::GetPointDualGeometry(
     TSet<FIntPoint>& VisitedPointSet,
     TMap<int32, int32>& CellIndexMap,
     TArray<FVector>& Points,
@@ -3063,12 +3106,12 @@ void UJCVDiagramAccessor::GetPointDualGeometry(
     {
         CellIndexMap.Emplace(ci2, Points.Num());
         CellIndices.Emplace(ci2);
-        Points.Emplace(Cell2.ToVector2D(), Cell1.Value);
+        Points.Emplace(Cell2.ToVector2D(), Cell2.Value);
     }
 
-    PolyIndices.Emplace(CellIndexMap.FindChecked(ci0));
-    PolyIndices.Emplace(CellIndexMap.FindChecked(ci1));
     PolyIndices.Emplace(CellIndexMap.FindChecked(ci2));
+    PolyIndices.Emplace(CellIndexMap.FindChecked(ci1));
+    PolyIndices.Emplace(CellIndexMap.FindChecked(ci0));
 
     VisitedPointSet.Emplace(PointId);
 }

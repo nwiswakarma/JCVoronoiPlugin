@@ -137,11 +137,17 @@ public:
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="GenerateDepthMap"))
     static void K2_GenerateDepthMap(UJCVDiagramAccessor* SrcAccessor, UJCVDiagramAccessor* DstAccessor, FJCVFeatureId FeatureId);
 
-    //UFUNCTION(BlueprintCallable, Category="JCV")
-    //static FJCVCellRef FindDepthMapCellOutsidePointRadius(UJCVDiagramAccessor* Accessor, int32 Seed, FVector2D Origin, float Radius, uint8 FeatureType, int32 FromIndex, int32 ToIndex);
-
     UFUNCTION(BlueprintCallable, Category="JCV")
-    static void GetCellsFromFeatures(UJCVDiagramAccessor* Accessor, const TArray<FJCVFeatureId>& FeatureIds, TArray<FJCVCellRefGroup>& CellRefGroups);
+    static void GetFeatureIdRange(TArray<FJCVFeatureId>& FeatureIds, uint8 FeatureType, int32 FeatureIndexStart, int32 FeatureIndexEnd, bool bInclusiveEnd = true);
+
+    UFUNCTION(BlueprintCallable, Category="JCV", meta=(AutoCreateRefTerm="FilterCells"))
+    static void GetCellsFromFeatures(
+        UJCVDiagramAccessor* Accessor,
+        TArray<FJCVCellRefGroup>& CellRefGroups,
+        const TArray<FJCVFeatureId>& FeatureIds,
+        const TArray<FJCVCellRef>& FilterCells,
+        bool bUseFilterCells = false
+        );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     static void GetRandomCellsFromFeaturesByDistanceFromDepthMapEdge(
@@ -149,9 +155,11 @@ public:
         int32 Seed,
         const TArray<FJCVFeatureId>& FeatureIds,
         TArray<FJCVCellRef>& OutCellRefs,
+        TArray<FJCVCellRef>& OutFilteredCellRefs,
         TArray<float>& OutDistances,
         float FilterDistanceRatio = 1.f,
-        float FilterDistanceRatioRandom = 0.f
+        float FilterDistanceRatioRandom = 0.f,
+        bool bGenerateFilteredCells = false
         );
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -162,8 +170,10 @@ public:
         int32 FeatureIndexStart,
         int32 FeatureIndexEnd,
         TArray<FJCVCellRef>& OutCellRefs,
+        TArray<FJCVCellRef>& OutFilteredCellRefs,
         TArray<float>& OutDistances,
         float FilterDistanceRatio = 1.f,
-        float FilterDistanceRatioRandom = 0.f
+        float FilterDistanceRatioRandom = 0.f,
+        bool bGenerateFilteredCells = false
         );
 };

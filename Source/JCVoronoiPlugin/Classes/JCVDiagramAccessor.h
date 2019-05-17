@@ -384,6 +384,17 @@ private:
         ) const;
 
     void GetPointDualGeometry(
+        TMap<int32, int32>& CellIndexMap,
+        TArray<FVector>& Points,
+        TArray<int32>& PolyIndices,
+        TArray<int32>& CellIndices,
+        const FJCVPoint& Point,
+        const FJCVCell& Cell0,
+        const FJCVCell& Cell1,
+        const FJCVCell& Cell2
+        ) const;
+
+    void GetPointDualGeometry(
         TSet<FIntPoint>& VisitedPointSet,
         TMap<int32, int32>& CellIndexMap,
         TArray<FVector>& Points,
