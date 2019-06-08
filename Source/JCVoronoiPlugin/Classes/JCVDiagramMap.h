@@ -276,7 +276,7 @@ struct FJCVCellEdgeList
     typedef TPair<const FJCVEdge*, const FJCVEdge*> FEdgePair;
     typedef TDoubleLinkedList<FVector2D> FPointList;
 
-    TDoubleLinkedList<FVector2D> PointList;
+    FPointList PointList;
     FEdgePair EdgePair;
 };
 
