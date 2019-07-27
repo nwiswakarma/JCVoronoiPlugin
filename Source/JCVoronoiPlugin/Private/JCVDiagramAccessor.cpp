@@ -240,7 +240,7 @@ void UJCVDiagramAccessor::MarkIsolatedFeatures(const TArray<FJCVCell*>& Bounding
         FVector2D InitialCellOrigin = InitialCell->ToVector2DUnsafe();
 
         // Cell is within poly, mark feature by point fill with the cell as origin
-        if (UGULPolyUtilityLibrary::IsPointInPoly(InitialCellOrigin, BoundingPoly))
+        if (UGULPolyUtilityLibrary::IsPointOnPoly(InitialCellOrigin, BoundingPoly))
         {
             // Mark feature and remove cell from candidate set
             InitialCell->SetType(FeatureMarkId.Type, FeatureMarkId.Index);
