@@ -133,6 +133,25 @@ struct FJCVCell
         }
     }
 
+    FORCEINLINE void GetBounds(FBox2D& OutBounds) const
+    {
+        if (IsValid())
+        {
+            const FJCVPoint& Center(Site->p);
+            OutBounds.Init();
+
+            if (const FJCVEdge* g = Site->edges)
+            do
+            {
+                const FJCVPoint& CellPoint(g->pos[0]);
+                const float PointX = CellPoint.x-Center.x;
+                const float PointY = CellPoint.y-Center.y;
+                OutBounds += FVector2D(PointX, PointY);
+            }
+            while ((g=g->next) != nullptr);
+        }
+    }
+
     FORCEINLINE bool IsBorder() const
     {
         return bIsBorder;
@@ -1304,9 +1323,19 @@ public:
         GenerateDiagram(Size, Points);
     }
 
+    FJCVDiagramMapContext(FBox2D Bounds, TArray<FVector2D>& Points)
+    {
+        GenerateDiagram(Bounds, Points);
+    }
+
     void GenerateDiagram(FVector2D Size, TArray<FVector2D>& Points)
     {
         Diagram.GenerateDiagram(Size, Points);
+    }
+
+    void GenerateDiagram(FBox2D Bounds, TArray<FVector2D>& Points)
+    {
+        Diagram.GenerateDiagram(Bounds, Points);
     }
 
     FORCEINLINE bool HasMap(int32 i) const

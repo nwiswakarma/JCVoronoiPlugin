@@ -28,14 +28,30 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "JCVDiagram.h"
 #include "JCVParameters.h"
 
 class FJCVDiagramMap;
 struct FJCVCell;
 
+typedef TFunction<bool(FJCVCell&,FJCVCell&,FJCVEdge&)> FJCVNeighbourVisitCallback;
+
 class FJCVCellUtility
 {
 public:
+
+    static void PointFillVisit(
+        FJCVDiagramMap& Map,
+        const TArray<FJCVCell*>& OriginCells,
+        const FJCVNeighbourVisitCallback& VisitCallback
+        );
+
+    static void ExpandVisit(
+        FJCVDiagramMap& Map,
+        int32 ExpandCount,
+        const TArray<FJCVCell*>& OriginCells,
+        const FJCVNeighbourVisitCallback& VisitCallback
+        );
 
     static float GetClosestDistanceFromCellSq(
         FJCVDiagramMap& Map,

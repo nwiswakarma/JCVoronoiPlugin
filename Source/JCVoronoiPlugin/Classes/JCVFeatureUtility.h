@@ -42,19 +42,6 @@ public:
 
     // Visit Utility
 
-    static void PointFillVisit(
-        FJCVDiagramMap& Map,
-        const TArray<FJCVCell*>& OriginCells,
-        const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
-        );
-
-    static void ExpandVisit(
-        FJCVDiagramMap& Map,
-        int32 ExpandCount,
-        const TArray<FJCVCell*>& OriginCells,
-        const TFunctionRef<bool(FJCVCell&,FJCVCell&)>& VisitCallback
-        );
-
     static void PointFill(FJCVDiagramMap& Map, const TArray<FJCVCell*>& OriginCells, uint8 FeatureTypeFilter = 255);
 
     static void PointFillIsolated(

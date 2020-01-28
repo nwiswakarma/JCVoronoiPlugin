@@ -30,6 +30,7 @@
 #include "SharedPointer.h"
 #include "UnrealMemory.h"
 #include "JCVDiagramTypes.h"
+#include "Geom/GULGeometryUtilityLibrary.h"
 
 typedef jcv_diagram     FJCVDiagram;
 typedef jcv_site        FJCVSite;
@@ -238,6 +239,78 @@ public:
         return nullptr;
     }
 
+    template<class ContainerType>
+    void FindAllToBySegmentClip(ContainerType& OutSites, const FVector2D& P0, const FVector2D& P1, const FJCVSite& s) const
+    {
+        // End point is within starting site, return immediately
+        if (IsWithin(s, P1))
+        {
+            OutSites.Emplace(&s);
+            return;
+        }
+
+        FVector2D LastIntersection;
+        float LastDistSq = GetFurthestIntersection(s, P0, P1, LastIntersection);
+
+        // Starting site has no segment intersection, abort
+        if (LastDistSq < 0.f)
+        {
+            return;
+        }
+
+        TSet<const FJCVSite*> VisitedSiteSet;
+        VisitedSiteSet.Emplace(&s);
+
+        const FJCVSite* NextSite = &s;
+        while (NextSite)
+        {
+            const FJCVEdge* g = NextSite->edges;
+            NextSite = nullptr;
+
+            // Visit each site neighbours
+            if (g)
+            do
+            {
+                const FJCVSite* n = g->neighbor;
+
+                // Skip invalid or already visited neighbour
+                if (! n || VisitedSiteSet.Contains(n))
+                {
+                    continue;
+                }
+
+                VisitedSiteSet.Emplace(n);
+
+                // End point is inside neighbour
+                if (IsWithin(*n, P1))
+                {
+                    OutSites.Emplace(n);
+                    return;
+                }
+                // Check for site intersection
+                else
+                {
+                    FVector2D NextIntersection;
+                    float NextDistSq = GetFurthestIntersection(*n, P0, P1, NextIntersection);
+
+                    // Neighbour site has intersection further from the current.
+                    // Add as output site and visit it on next iteration.
+                    if (NextDistSq > LastDistSq)
+                    {
+                        LastIntersection = NextIntersection;
+                        LastDistSq = NextDistSq;
+                        OutSites.Emplace(n);
+
+                        NextSite = n;
+
+                        break;
+                    }
+                }
+            }
+            while ((g=g->next) != nullptr);
+        }
+    }
+
     /**
      * Find a site which origin is closest to the specified point.
      *
@@ -413,6 +486,48 @@ public:
         }
         while ((g=g->next) != nullptr);
         return false;
+    }
+
+    FORCEINLINE bool HasIntersection(const FJCVSite& s, const FVector2D& P0, const FVector2D& P1, FVector2D& OutIntersection) const
+    {
+        const FJCVEdge* g = s.edges;
+        if (g)
+        do
+        {
+            FVector2D sp0(FJCVMathUtil::ToVector2D(g->pos[0]));
+            FVector2D sp1(FJCVMathUtil::ToVector2D(g->pos[1]));
+            if (UGULGeometryUtility::SegmentIntersection2D(sp0, sp1, P0, P1, OutIntersection))
+                return true;
+        }
+        while ((g=g->next) != nullptr);
+        return false;
+    }
+
+    inline float GetFurthestIntersection(const FJCVSite& s, const FVector2D& P0, const FVector2D& P1, FVector2D& OutIntersection) const
+    {
+        FVector2D Intersection;
+        float FurthestIntersectionDistSq = -1.f;
+        const FJCVEdge* g = s.edges;
+
+        if (g)
+        do
+        {
+            FVector2D sp0(FJCVMathUtil::ToVector2D(g->pos[0]));
+            FVector2D sp1(FJCVMathUtil::ToVector2D(g->pos[1]));
+            if (UGULGeometryUtility::SegmentIntersection2D(sp0, sp1, P0, P1, Intersection))
+            {
+                float DistSq = (P0-Intersection).SizeSquared();
+
+                if (DistSq > FurthestIntersectionDistSq)
+                {
+                    OutIntersection = Intersection;
+                    FurthestIntersectionDistSq = DistSq;
+                }
+            }
+        }
+        while ((g=g->next) != nullptr);
+
+        return FurthestIntersectionDistSq;
     }
 
     FORCEINLINE void GetPoints(const FJCVSite& s, TArray<FJCVPoint>& pts) const

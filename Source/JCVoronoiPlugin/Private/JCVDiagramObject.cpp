@@ -67,6 +67,27 @@ void UJCVDiagramObject::CreateContext(int32 ContextId, FVector2D Size, TArray<FV
     }
 }
 
+void UJCVDiagramObject::CreateContextByBounds(int32 ContextId, FBox2D Bounds, TArray<FVector2D> Points)
+{
+    if (Points.Num() <= 0)
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContextByBounds() ABORTED, UNABLE TO GENERATE ISLAND WITH EMPTY POINTS"));
+        return;
+    }
+    else
+    if (! Bounds.bIsValid)
+    {
+        UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContextByBounds() ABORTED, INVALID BOUNDS"));
+        return;
+    }
+
+    if (! HasContext(ContextId))
+    {
+        FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(Bounds, Points));
+        ContextMap.Emplace(ContextId, Context);
+    }
+}
+
 void UJCVDiagramObject::CreateMap(int32 ContextId, int32 MapId)
 {
     if (HasContext(ContextId))

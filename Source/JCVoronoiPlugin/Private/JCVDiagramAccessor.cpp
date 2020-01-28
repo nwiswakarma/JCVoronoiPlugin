@@ -174,7 +174,35 @@ void UJCVDiagramAccessor::MarkPoly(const TArray<FVector2D>& Points, FJCVFeatureI
 
     TArray<FJCVCell*> BoundingCells;
 
-    MarkPositionsContiguous(Points, FeatureMarkId, &BoundingCells, bClampPoints);
+#if 1
+    if (bClampPoints)
+    {
+        const FBox2D& Bounds(Map->GetBounds());
+
+        // Clamp input points
+
+        TArray<FVector2D> ClampedPoints(Points);
+
+        for (FVector2D& Point : ClampedPoints)
+        {
+            Point = FMath::Clamp(Point, Bounds.Min, Bounds.Max);
+        }
+
+        MarkPoly(ClampedPoints, FeatureMarkId, &BoundingCells);
+    }
+    else
+    {
+        MarkPoly(Points, FeatureMarkId, &BoundingCells);
+    }
+#else
+    MarkPositionsContiguous(
+        Points,
+        FeatureMarkId,
+        &BoundingCells,
+        bClampPoints
+        );
+#endif
+
     MarkIsolatedFeatures(BoundingCells, FeatureMarkId);
 }
 
@@ -222,11 +250,15 @@ void UJCVDiagramAccessor::MarkIsolatedFeatures(const TArray<FJCVCell*>& Bounding
     TSet<FJCVCell*> ExpandCellSet;
     ExpandCellSet.Reserve(BoundingCellCount*3);
 
-    FJCVFeatureUtility::ExpandVisit(
+    FJCVCellUtility::ExpandVisit(
         *Map,
         1,
         BoundingCells,
-        [&ExpandCellSet,FeatureMarkId](FJCVCell& Cell, FJCVCell& NeighbourCell)
+        [&ExpandCellSet,FeatureMarkId](
+            FJCVCell& Cell,
+            FJCVCell& NeighbourCell,
+            FJCVEdge& CellEdge
+            )
         {
             ExpandCellSet.Emplace(&NeighbourCell);
             return false;
@@ -246,10 +278,14 @@ void UJCVDiagramAccessor::MarkIsolatedFeatures(const TArray<FJCVCell*>& Bounding
             InitialCell->SetType(FeatureMarkId.Type, FeatureMarkId.Index);
             ExpandCellSet.Remove(InitialCell);
 
-            FJCVFeatureUtility::PointFillVisit(
+            FJCVCellUtility::PointFillVisit(
                 *Map,
                 { InitialCell },
-                [&ExpandCellSet,FeatureMarkId](FJCVCell& CurrentCell, FJCVCell& NeighbourCell)
+                [&ExpandCellSet,FeatureMarkId](
+                    FJCVCell& CurrentCell,
+                    FJCVCell& NeighbourCell,
+                    FJCVEdge& CellEdge
+                    )
                 {
                     // Remove neighbour cell from candidate set
                     if (ExpandCellSet.Contains(&NeighbourCell))
@@ -361,6 +397,87 @@ void UJCVDiagramAccessor::MarkPositionsContiguous(const TArray<FVector2D>& Posit
             {
                 VisitedCells->Emplace(MapRef.GetCell(SiteIt));
             }
+        }
+    }
+
+    if (VisitedCells)
+    {
+        VisitedCells->Shrink();
+    }
+}
+
+void UJCVDiagramAccessor::MarkPoly(const TArray<FVector2D>& Points, const FJCVFeatureId& FeatureId, TArray<FJCVCell*>* VisitedCells)
+{
+    check(HasValidMap())
+
+    FJCVDiagramMap& MapRef(*Map);
+    const int32 PointCount = Points.Num();
+    const int32 SiteCount = MapRef.Num();
+    const int32 ReserveCount = FMath::Min(PointCount, SiteCount);
+
+    if (PointCount < 3)
+    {
+        return;
+    }
+
+    TSet<const FJCVSite*> VisitedSiteSet;
+    VisitedSiteSet.Reserve(ReserveCount);
+
+    if (VisitedCells)
+    {
+        VisitedCells->Reserve(ReserveCount);
+    }
+
+    const int32 EndIndex = Points[0].Equals(Points.Last())
+        ? PointCount-1
+        : PointCount;
+
+    TArray<const FJCVSite*> SegmentSites;
+    const FJCVSite* SiteIt = nullptr;
+
+    // Find initial site
+    {
+        SiteIt = MapRef->Find(Points[0]);
+        MapRef.MarkFiltered(SiteIt, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
+
+        check(SiteIt != nullptr);
+
+        if (VisitedCells)
+        {
+            VisitedCells->Emplace(MapRef.GetCell(SiteIt));
+        }
+    }
+
+    for (int32 i=0; i<EndIndex; ++i)
+    {
+        int32 i0 = i;
+        int32 i1 = (i+1) % PointCount;
+        const FVector2D& P0(Points[i0]);
+        const FVector2D& P1(Points[i1]);
+
+        SegmentSites.Reset();
+
+        MapRef->FindAllToBySegmentClip(SegmentSites, P0, P1, *SiteIt);
+
+        if (VisitedCells)
+        {
+            VisitedCells->Reserve(VisitedCells->Num()+SegmentSites.Num());
+        }
+
+        for (const FJCVSite* SegmentSite : SegmentSites)
+        {
+            check(SegmentSite != nullptr);
+            MapRef.MarkFiltered(SegmentSite, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
+
+            if (VisitedCells)
+            {
+                VisitedCells->Emplace(MapRef.GetCell(SegmentSite));
+            }
+        }
+
+        if (SegmentSites.Num() > 0)
+        {
+            SiteIt = SegmentSites.Last();
         }
     }
 
@@ -878,6 +995,14 @@ int32 UJCVDiagramAccessor::GetCellCount() const
 void UJCVDiagramAccessor::GetCellDetails(const FJCVCellRef& CellRef, FJCVCellDetailsRef& CellDetails)
 {
     CellDetails.Set(CellRef);
+}
+
+void UJCVDiagramAccessor::GetCellBounds(const FJCVCellRef& CellRef, FBox2D& CellBounds)
+{
+    if (CellRef.HasValidCell())
+    {
+        CellRef.Data->GetBounds(CellBounds);
+    }
 }
 
 void UJCVDiagramAccessor::GetCellGroupDetails(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCellDetailsRef>& CellDetails)
@@ -2906,9 +3031,9 @@ void UJCVDiagramAccessor::GenerateDualGeometryByFeature(FJCVDualGeometry& Geomet
             Points.Emplace(NeighbourCell0.ToVector2D(), NeighbourCell0.Value);
             Points.Emplace(NeighbourCell1.ToVector2D(), NeighbourCell1.Value);
 
-            PolyIndices.Emplace(CenterVertIndex);
-            PolyIndices.Emplace(IndexOffset  );
             PolyIndices.Emplace(IndexOffset+1);
+            PolyIndices.Emplace(IndexOffset  );
+            PolyIndices.Emplace(CenterVertIndex);
         } );
 
     for (const int32 fi : FeatureIndices)

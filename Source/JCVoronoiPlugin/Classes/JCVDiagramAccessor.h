@@ -128,6 +128,9 @@ public:
     void GetCellDetails(const FJCVCellRef& CellRef, FJCVCellDetailsRef& CellDetails);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
+    void GetCellBounds(const FJCVCellRef& CellRef, FBox2D& CellBounds);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
     void GetCellGroupDetails(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCellDetailsRef>& CellDetails);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
@@ -408,6 +411,7 @@ private:
 
     void MarkPositions(const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, TArray<FJCVCell*>* VisitedCells = nullptr, bool bClampPoints = true);
     void MarkPositionsContiguous(const TArray<FVector2D>& Positions, const FJCVFeatureId& FeatureId, TArray<FJCVCell*>* VisitedCells = nullptr, bool bClampPoints = true);
+    void MarkPoly(const TArray<FVector2D>& Points, const FJCVFeatureId& FeatureId, TArray<FJCVCell*>* VisitedCells = nullptr);
     void MarkIsolatedFeatures(const TArray<FJCVCell*>& BoundingCells, const FJCVFeatureId& FeatureMarkId);
 
     void GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, TArray<FJCVCell*>& Cells) const;

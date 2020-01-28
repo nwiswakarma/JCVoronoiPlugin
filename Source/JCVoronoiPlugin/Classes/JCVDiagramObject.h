@@ -67,34 +67,34 @@ class JCVORONOIPLUGIN_API UJCVDiagramObject : public UObject
 	UPROPERTY(Transient)
     TArray<UJCVDiagramAccessor*> Accessors;
 
-    FORCEINLINE bool HasContext(int32 ContextID) const
+    FORCEINLINE bool HasContext(int32 ContextId) const
     {
-        return ContextMap.Contains(ContextID) && ContextMap.FindChecked(ContextID).IsValid();
+        return ContextMap.Contains(ContextId) && ContextMap.FindChecked(ContextId).IsValid();
     }
 
-    FORCEINLINE bool HasMap(int32 ContextID, int32 MapID) const
+    FORCEINLINE bool HasMap(int32 ContextId, int32 MapID) const
     {
-        return HasContext(ContextID) ? GetContext(ContextID)->HasMap(MapID) : false;
+        return HasContext(ContextId) ? GetContext(ContextId)->HasMap(MapID) : false;
     }
 
-    FORCEINLINE FPSJCVDiagramMapContext GetContext(int32 ContextID)
+    FORCEINLINE FPSJCVDiagramMapContext GetContext(int32 ContextId)
     {
-        return ContextMap.FindChecked(ContextID).Get();
+        return ContextMap.FindChecked(ContextId).Get();
     }
 
-    FORCEINLINE FPSJCVDiagramMapContext GetContext(int32 ContextID) const
+    FORCEINLINE FPSJCVDiagramMapContext GetContext(int32 ContextId) const
     {
-        return ContextMap.FindChecked(ContextID).Get();
+        return ContextMap.FindChecked(ContextId).Get();
     }
 
-    FORCEINLINE FJCVDiagramMap& GetMap(int32 ContextID, int32 MapID)
+    FORCEINLINE FJCVDiagramMap& GetMap(int32 ContextId, int32 MapID)
     {
-        return GetContext(ContextID)->GetMap(MapID);
+        return GetContext(ContextId)->GetMap(MapID);
     }
 
-    FORCEINLINE FJCVDiagramMap& GetMap(int32 ContextID, int32 MapID) const
+    FORCEINLINE FJCVDiagramMap& GetMap(int32 ContextId, int32 MapID) const
     {
-        return GetContext(ContextID)->GetMap(MapID);
+        return GetContext(ContextId)->GetMap(MapID);
     }
 
     int32 CreateAccessor(FJCVDiagramMap& Map, int32 ContextId, int32 MapId);
@@ -104,26 +104,29 @@ public:
     virtual void BeginDestroy() override;
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Has Context"))
-    bool K2_HasContext(int32 ContextID) const;
+    bool K2_HasContext(int32 ContextId) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV", meta=(DisplayName="Has Map"))
-    bool K2_HasMap(int32 ContextID, int32 MapID) const;
+    bool K2_HasMap(int32 ContextId, int32 MapID) const;
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void ResetDiagramObject();
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateContext(int32 ContextID, FVector2D Size, TArray<FVector2D> Points);
+    void CreateContext(int32 ContextId, FVector2D Size, TArray<FVector2D> Points);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateMap(int32 ContextID, int32 MapID);
+    void CreateContextByBounds(int32 ContextId, FBox2D Bounds, TArray<FVector2D> Points);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateMapWithDefaultType(int32 ContextID, int32 MapID, uint8 FeatureType, int32 FeatureIndex);
+    void CreateMap(int32 ContextId, int32 MapID);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CopyMap(int32 ContextID, int32 SrcMapID, int32 DstMapID);
+    void CreateMapWithDefaultType(int32 ContextId, int32 MapID, uint8 FeatureType, int32 FeatureIndex);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    UJCVDiagramAccessor* GetAccessor(int32 ContextID, int32 MapID);
+    void CopyMap(int32 ContextId, int32 SrcMapID, int32 DstMapID);
+
+    UFUNCTION(BlueprintCallable, Category="JCV")
+    UJCVDiagramAccessor* GetAccessor(int32 ContextId, int32 MapID);
 };
