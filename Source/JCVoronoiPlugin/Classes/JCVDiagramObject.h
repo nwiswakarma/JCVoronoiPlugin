@@ -113,10 +113,10 @@ public:
     void ResetDiagramObject();
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateContext(int32 ContextId, FVector2D Size, TArray<FVector2D> Points);
+    void CreateContext(int32 ContextId, const FVector2D& InSize, const TArray<FVector2D>& InPoints);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
-    void CreateContextByBounds(int32 ContextId, FBox2D Bounds, TArray<FVector2D> Points);
+    void CreateContextByBounds(int32 ContextId, const FBox2D& InBounds, const TArray<FVector2D>& InPoints);
 
     UFUNCTION(BlueprintCallable, Category="JCV")
     void CreateMap(int32 ContextId, int32 MapID);

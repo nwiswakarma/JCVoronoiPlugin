@@ -52,9 +52,9 @@ void UJCVDiagramObject::ResetDiagramObject()
     Accessors.Empty();
 }
 
-void UJCVDiagramObject::CreateContext(int32 ContextId, FVector2D Size, TArray<FVector2D> Points)
+void UJCVDiagramObject::CreateContext(int32 ContextId, const FVector2D& InSize, const TArray<FVector2D>& InPoints)
 {
-    if (Points.Num() <= 0)
+    if (InPoints.Num() <= 0)
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContext() ABORTED, UNABLE TO GENERATE ISLAND WITH EMPTY POINTS"));
         return;
@@ -62,20 +62,22 @@ void UJCVDiagramObject::CreateContext(int32 ContextId, FVector2D Size, TArray<FV
 
     if (! HasContext(ContextId))
     {
-        FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(Size, Points));
+        FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(InSize, InPoints));
         ContextMap.Emplace(ContextId, Context);
     }
 }
 
-void UJCVDiagramObject::CreateContextByBounds(int32 ContextId, FBox2D Bounds, TArray<FVector2D> Points)
+void UJCVDiagramObject::CreateContextByBounds(int32 ContextId, const FBox2D& InBounds, const TArray<FVector2D>& InPoints)
 {
-    if (Points.Num() <= 0)
+    FBox2D Bounds(InBounds.Min, InBounds.Max);
+
+    if (InPoints.Num() <= 0)
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContextByBounds() ABORTED, UNABLE TO GENERATE ISLAND WITH EMPTY POINTS"));
         return;
     }
     else
-    if (! Bounds.bIsValid)
+    if (! Bounds.bIsValid || Bounds.Min.X > Bounds.Max.X || Bounds.Min.Y > Bounds.Max.Y)
     {
         UE_LOG(LogJCV,Warning, TEXT("UJCVDiagramObject::CreateContextByBounds() ABORTED, INVALID BOUNDS"));
         return;
@@ -83,7 +85,7 @@ void UJCVDiagramObject::CreateContextByBounds(int32 ContextId, FBox2D Bounds, TA
 
     if (! HasContext(ContextId))
     {
-        FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(Bounds, Points));
+        FPSJCVDiagramMapContext Context(new FJCVDiagramMapContext(Bounds, InPoints));
         ContextMap.Emplace(ContextId, Context);
     }
 }

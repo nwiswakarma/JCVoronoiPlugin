@@ -77,18 +77,18 @@ public:
         FMemory::Memset(Diagram.Get(), 0, sizeof(jcv_diagram));
     }
 
-    FORCEINLINE void GenerateDiagram(FVector2D Size, TArray<FVector2D>& InOutPoints)
+    FORCEINLINE void GenerateDiagram(const FVector2D& Size, const TArray<FVector2D>& InPoints)
     {
         check(Size.X > 0.f && Size.Y > 0.f);
-        GenerateDiagram(FBox2D(FVector2D(0.f, 0.f), Size), InOutPoints);
+        GenerateDiagram(FBox2D(FVector2D(0.f, 0.f), Size), InPoints);
     }
 
-    void GenerateDiagram(FBox2D Bounds, TArray<FVector2D>& InOutPoints)
+    void GenerateDiagram(const FBox2D& Bounds, const TArray<FVector2D>& InPoints)
     {
-        check(Bounds.bIsValid);
+        check(Bounds.Min.X <= Bounds.Max.X && Bounds.Min.Y <= Bounds.Max.Y);
         check(Diagram.IsValid());
         
-        if (InOutPoints.Num() == 0)
+        if (InPoints.Num() == 0)
             return;
 
         DiagramBounds = Bounds;
@@ -99,7 +99,7 @@ public:
         JCVBounds.max.x = Bounds.Max.X;
         JCVBounds.max.y = Bounds.Max.Y;
 
-        const int32 PointCount = InOutPoints.Num();
+        const int32 PointCount = InPoints.Num();
 
         FJCVPoint* Points = nullptr;
         {
@@ -109,17 +109,17 @@ public:
                 return;
 
             // Memcpy if point/vector data size are equals
-            if (sizeof(FJCVPoint) == InOutPoints.GetTypeSize())
+            if (sizeof(FJCVPoint) == InPoints.GetTypeSize())
             {
-                FMemory::Memcpy(Points, InOutPoints.GetData(), PointCount*InOutPoints.GetTypeSize());
+                FMemory::Memcpy(Points, InPoints.GetData(), PointCount*InPoints.GetTypeSize());
             }
             // Otherwise, standard array assign
             else
             {
                 for (int32 i=0; i<PointCount; ++i)
                 {
-                    Points[i].x = InOutPoints[i].X;
-                    Points[i].y = InOutPoints[i].Y;
+                    Points[i].x = InPoints[i].X;
+                    Points[i].y = InPoints[i].Y;
                 }
             }
         }

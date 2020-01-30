@@ -124,7 +124,7 @@ void UJCVDiagramAccessor::GetCellsFromRefs(const TArray<FJCVCellRef>& CellRefs, 
 //    }
 //}
 
-void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& Positions, FJCVFeatureId FeatureId, bool bContiguous, bool bClampPoints, bool bExtractVisitedCells)
+void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, const TArray<FVector2D>& InPoints, FJCVFeatureId FeatureId, bool bContiguous, bool bClampPoints, bool bExtractVisitedCells)
 {
     if (! HasValidMap())
     {
@@ -132,7 +132,7 @@ void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, co
         return;
     }
 
-    if (Positions.Num() <= 0)
+    if (InPoints.Num() < 1)
     {
         return;
     }
@@ -142,11 +142,31 @@ void UJCVDiagramAccessor::MarkPositions(TArray<FJCVCellRef>& VisitedCellRefs, co
 
     if (bContiguous)
     {
-        MarkPositionsContiguous(Positions, FeatureId, VisitedCellsPtr, bClampPoints);
+        //MarkPositionsContiguous(InPoints, FeatureId, VisitedCellsPtr, bClampPoints);
+
+        if (bClampPoints)
+        {
+            const FBox2D& Bounds(Map->GetBounds());
+
+            // Clamp input points
+
+            TArray<FVector2D> ClampedPoints(InPoints);
+
+            for (FVector2D& Point : ClampedPoints)
+            {
+                Point = FMath::Clamp(Point, Bounds.Min, Bounds.Max);
+            }
+
+            MarkPoly(ClampedPoints, FeatureId, VisitedCellsPtr);
+        }
+        else
+        {
+            MarkPoly(InPoints, FeatureId, VisitedCellsPtr);
+        }
     }
     else
     {
-        MarkPositions(Positions, FeatureId, VisitedCellsPtr, bClampPoints);
+        MarkPositions(InPoints, FeatureId, VisitedCellsPtr, bClampPoints);
     }
 
     if (bExtractVisitedCells)
@@ -440,7 +460,10 @@ void UJCVDiagramAccessor::MarkPoly(const TArray<FVector2D>& Points, const FJCVFe
         SiteIt = MapRef->Find(Points[0]);
         MapRef.MarkFiltered(SiteIt, FeatureId.Type, FeatureId.Index, VisitedSiteSet, true);
 
-        check(SiteIt != nullptr);
+        if (! SiteIt)
+        {
+            return;
+        }
 
         if (VisitedCells)
         {

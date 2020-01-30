@@ -1318,22 +1318,22 @@ public:
 
     FJCVDiagramMapContext() = default;
 
-    FJCVDiagramMapContext(FVector2D Size, TArray<FVector2D>& Points)
+    FJCVDiagramMapContext(FVector2D Size, const TArray<FVector2D>& Points)
     {
         GenerateDiagram(Size, Points);
     }
 
-    FJCVDiagramMapContext(FBox2D Bounds, TArray<FVector2D>& Points)
+    FJCVDiagramMapContext(const FBox2D& Bounds, const TArray<FVector2D>& Points)
     {
         GenerateDiagram(Bounds, Points);
     }
 
-    void GenerateDiagram(FVector2D Size, TArray<FVector2D>& Points)
+    void GenerateDiagram(FVector2D Size, const TArray<FVector2D>& Points)
     {
         Diagram.GenerateDiagram(Size, Points);
     }
 
-    void GenerateDiagram(FBox2D Bounds, TArray<FVector2D>& Points)
+    void GenerateDiagram(const FBox2D& Bounds, const TArray<FVector2D>& Points)
     {
         Diagram.GenerateDiagram(Bounds, Points);
     }
